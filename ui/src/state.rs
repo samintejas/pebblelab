@@ -26,6 +26,8 @@ pub struct AppState {
     /// The subscription or asset open in the side panel.
     pub side: RwSignal<Option<Side>>,
     pub toasts: Toasts,
+    /// Running inside fin: load its accounts, tags and notifications too. The account needs only who you are.
+    fin: bool,
 }
 
 impl AppState {
@@ -40,7 +42,13 @@ impl AppState {
             panel: RwSignal::new(None),
             side: RwSignal::new(None),
             toasts: use_toasts(),
+            fin: true,
         }
+    }
+
+    /// The state the account pages need: who you are, and toasts.
+    pub fn account() -> Self {
+        AppState { fin: false, ..AppState::new() }
     }
 
     pub fn currency(&self) -> String {
@@ -125,6 +133,10 @@ impl AppState {
                     s.fail(&e);
                     return;
                 }
+            }
+            if !s.fin {
+                s.bump();
+                return;
             }
             if let Ok(a) = api::accounts().await {
                 s.accounts.set(a);

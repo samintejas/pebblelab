@@ -5,11 +5,13 @@ use leptos_router::hooks::{use_location, use_navigate};
 
 use crate::api;
 use crate::icons::*;
+use crate::pages::apps::AppsMenu;
+use crate::site::{self, use_site};
 use crate::pages::transactions::TxPanel;
 use crate::pages::{AssetPanel, SubPanel};
 use crate::state::{AppState, Side};
 
-/// `/accounts/3` and `settings/family` style links from a notification.
+/// Where a notification leads: `accounts/3` is in fin, `account/family` in the pebblelab account.
 fn link_path(link: &str) -> Option<String> {
     (!link.is_empty()).then(|| format!("/{}", link.trim_start_matches('/')))
 }
@@ -33,16 +35,26 @@ pub fn AppShell() -> impl IntoView {
     let app = AppState::new();
     provide_context(app);
     let nav = use_navigate();
-    if api::load_token().is_none() {
-        nav("/signin", Default::default());
-    } else {
+    let site = use_site();
+    // no session here: sign in at the account, which hands the browser back
+    let to_sign_in = {
+        let nav = nav.clone();
+        move || {
+            if site.is_fin_only() {
+                site::sign_in_elsewhere(&site, "fin");
+            } else {
+                nav("/signin?app=fin", Default::default());
+            }
+        }
+    };
+    if api::load_token().is_some() {
         app.reload();
     }
     {
-        let nav = nav.clone();
+        let to_sign_in = to_sign_in.clone();
         Effect::new(move |_| {
-            if app.me.get().is_none() && api::token().is_none() {
-                nav("/signin", Default::default());
+            if site.ready() && app.me.get().is_none() && api::token().is_none() {
+                to_sign_in();
             }
         });
     }
@@ -71,9 +83,7 @@ pub fn AppShell() -> impl IntoView {
         let p = path.get();
         let parts: Vec<&str> = p.trim_start_matches('/').split('/').collect();
         match parts.as_slice() {
-            ["settings"] => "settings / profile".to_string(),
-            ["settings", "prefs"] => "settings / preferences".to_string(),
-            ["settings", tab] => format!("settings / {tab}"),
+            ["settings", ..] => "settings".to_string(),
             ["accounts", "new"] => "accounts / new".to_string(),
             ["accounts", id] => format!("accounts / {}", id.parse().map(|i| app.account_name(i)).unwrap_or_default()),
             [one] => one.to_string(),
@@ -91,13 +101,15 @@ pub fn AppShell() -> impl IntoView {
     });
     Effect::new(move |_| theme_name.set(theme.get().as_str().to_string()));
 
+    // signing out of fin signs this browser out of the account too
     let sign_out = move |()| {
         leptos::task::spawn_local(async move {
             let _ = api::post::<serde_json::Value>("/auth/signout", &serde_json::json!({})).await;
             api::clear_token();
-            app.me.set(None);
+            site::go_external("/");
         });
     };
+    let account_link = move |section: &str| site.account_href(&format!("/account{section}"));
     let tile_name = move || app.me.with(|m| match m {
         Some(m) => m.family.as_ref().map(|f| f.name.clone()).unwrap_or_else(|| m.user.name.clone()),
         None => String::new(),
@@ -123,8 +135,8 @@ pub fn AppShell() -> impl IntoView {
                         {move || view! { <SidebarItem href="/accounts" icon="wallet" label="accounts" current=Signal::derive(move || page.get() == "accounts") count=acct_count().to_string()/> }}
                     </SidebarGroup>
                     <SidebarGroup label="track">
-                        <TrackItem href="/subscriptions" icon=REPEAT label="subscriptions" current=Signal::derive(move || page.get() == "subscriptions")/>
-                        <TrackItem href="/assets" icon=PACKAGE label="assets" current=Signal::derive(move || page.get() == "assets")/>
+                        <SidebarItem href="/subscriptions" icon="repeat" label="subscriptions" current=Signal::derive(move || page.get() == "subscriptions")/>
+                        <SidebarItem href="/assets" icon="package" label="assets" current=Signal::derive(move || page.get() == "assets")/>
                     </SidebarGroup>
                 </SidebarContent>
                 <SidebarFoot>
@@ -141,8 +153,9 @@ pub fn AppShell() -> impl IntoView {
                             </button>
                         }
                     >
-                        <MenuLink href="/settings">"settings"</MenuLink>
-                        <MenuLink href="/settings/family">"family"</MenuLink>
+                        <MenuLink href="/settings">"fin settings"</MenuLink>
+                        <MenuLink href=account_link("")>"pebblelab account"</MenuLink>
+                        <MenuLink href=account_link("/family")>"family"</MenuLink>
                         <MenuSeparator/>
                         <MenuRadioGroup label="theme" value=theme_name>
                             <MenuRadio value="dark">"dark"</MenuRadio>
@@ -163,6 +176,7 @@ pub fn AppShell() -> impl IntoView {
                     </Breadcrumbs>
                     <AppBarSpacer/>
                     <Notifications/>
+                    <AppsMenu current="fin"/>
                 </AppBar>
                 <Main><div class="page"><Outlet/></div></Main>
             </ShellMain>
@@ -177,24 +191,11 @@ pub fn AppShell() -> impl IntoView {
     }
 }
 
-/// A sidebar row for the screens whose icon is not in the bundled set: the same markup as `SidebarItem`.
-#[component]
-fn TrackItem(href: &'static str, icon: &'static str, label: &'static str, #[prop(into)] current: Signal<bool>) -> impl IntoView {
-    let shell = use_shell();
-    view! {
-        <li class="d-sidebar__item">
-            <a class="d-sidebar__btn" href=href aria-current=move || current.get().then_some("page") data-tooltip=move || shell.icon_rail().then_some(label)>
-                <Ico d=icon/>
-                <span class="d-sidebar__label">{label}</span>
-            </a>
-        </li>
-    }
-}
-
 /// The bell and its panel: a title, one line of detail and when, with a dot on what is unread.
 #[component]
 fn Notifications() -> impl IntoView {
     let app = expect_context::<AppState>();
+    let site = use_site();
     let open = RwSignal::new(false);
     let nav = use_navigate();
     let unread = move || app.notes.with(|n| n.iter().filter(|n| !n.read).count());
@@ -251,27 +252,33 @@ fn Notifications() -> impl IntoView {
                                 return view! { <div style="padding:12px 16px;border-top:1px solid var(--border-default);color:var(--text-secondary)">"nothing yet. card due dates, emis and family activity show up here."</div> }.into_any();
                             }
                             let nav = nav.clone();
-                            list.into_iter().map(|n| {
-                                let nav = nav.clone();
-                                let (id, link, unread) = (n.id, link_path(&n.link), !n.read);
-                                view! {
-                                    <button type="button" class="nt" on:click=move |_| {
-                                        if unread { read(Some(id)); }
-                                        open.set(false);
-                                        if let Some(l) = &link { nav(l, Default::default()); }
-                                    }>
-                                        <span class="nt__dot" aria-hidden="true" style=if unread { "background:var(--accent-primary)" } else { "background:transparent" }></span>
-                                        <span style=if unread { "color:var(--text-strong)" } else { "color:var(--text-primary)" }>{n.title.clone()}{unread.then(|| view! { <span class="d-sr">", unread"</span> })}</span>
-                                        <span style="color:var(--text-secondary);font-size:var(--font-size-xs)">{when(&n.created_at)}</span>
-                                        <span></span>
-                                        <span style="grid-column:2 / 4;color:var(--text-secondary)">{n.body.clone()}</span>
-                                    </button>
-                                }
-                            }).collect_view().into_any()
+                            view! {
+                                <Feed label="notifications">
+                                    {list.into_iter().map(|n| {
+                                        let nav = nav.clone();
+                                        let (id, link, unread) = (n.id, link_path(&n.link), !n.read);
+                                        let go = Callback::new(move |()| {
+                                            if unread { read(Some(id)); }
+                                            open.set(false);
+                                            match &link {
+                                                Some(l) if l.starts_with("/account") => {
+                                                    let href = site.account_href(l);
+                                                    if href.starts_with("http") { site::go_external(&href) } else { nav(&href, Default::default()) }
+                                                }
+                                                Some(l) => nav(l, Default::default()),
+                                                None => {}
+                                            }
+                                        });
+                                        view! {
+                                            <FeedItem title=n.title.clone() text=n.body.clone() time=when(&n.created_at) unread=unread on_select=go/>
+                                        }
+                                    }).collect_view()}
+                                </Feed>
+                            }.into_any()
                         }}
                         </div>
                         <div class="d-row" style="justify-content:flex-end;flex-wrap:nowrap;padding:8px 8px 8px 16px;border-top:1px solid var(--border-default)">
-                            <button type="button" class="d-btn d-btn--ghost d-btn--sm" on:click=move |_| { open.set(false); nav2("/settings/prefs", Default::default()); }>"notification settings"</button>
+                            <button type="button" class="d-btn d-btn--ghost d-btn--sm" on:click=move |_| { open.set(false); nav2("/settings", Default::default()); }>"notification settings"</button>
                         </div>
                     </section>
                 }

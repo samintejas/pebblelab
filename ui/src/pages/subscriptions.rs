@@ -173,9 +173,14 @@ pub fn SubPanel(sub: Option<Subscription>) -> impl IntoView {
             }
         });
     };
-    let seg = move |value: Cycle| view! {
-        <button type="button" class="seg__opt" aria-pressed=move || (cycle.get() == value).to_string() on:click=move |_| cycle.set(value)>{value.as_str()}</button>
-    };
+    let cycle_s = RwSignal::new(cycle.get_untracked().as_str().to_string());
+    Effect::new(move |_| {
+        let c = if cycle_s.get() == Cycle::Yearly.as_str() { Cycle::Yearly } else { Cycle::Monthly };
+        if cycle.get_untracked() != c {
+            cycle.set(c);
+        }
+    });
+    let seg = move |value: Cycle| view! { <SegOption value=value.as_str()>{value.as_str()}</SegOption> };
     view! {
         <form class="d-rightbar__inner" aria-labelledby="ss-t" on:submit=move |e| { e.prevent_default(); save() }>
             <header class="d-rightbar__head">
@@ -198,7 +203,7 @@ pub fn SubPanel(sub: Option<Subscription>) -> impl IntoView {
                 </div>
                 <div class="d-field">
                     <span class="d-label" id="ss-cy">"billed"</span>
-                    <div class="seg" role="group" aria-labelledby="ss-cy">{seg(Cycle::Monthly)}{seg(Cycle::Yearly)}</div>
+                    <Segmented value=cycle_s labelledby="ss-cy" size=Size::Lg fill=true>{seg(Cycle::Monthly)}{seg(Cycle::Yearly)}</Segmented>
                 </div>
                 <div class="d-field">
                     <label class="d-label" for="ss-next">"next renewal"</label>
@@ -221,7 +226,7 @@ pub fn SubPanel(sub: Option<Subscription>) -> impl IntoView {
                     <label class="d-label" for="ss-tag">"tag"</label>
                     <input class="d-input" id="ss-tag" type="text" prop:value=move || tag.get() on:input=move |e| tag.set(event_target_value(&e))/>
                 </div>
-                <label class="set__row" style="border-top:0"><span>"active"</span><input type="checkbox" role="switch" class="d-switch" prop:checked=move || active.get() on:change=move |e| active.set(event_target_checked(&e))/></label>
+                <label class="d-setrow" style="border-top:0"><span class="d-setrow__text">"active"</span><input type="checkbox" role="switch" class="d-switch" prop:checked=move || active.get() on:change=move |e| active.set(event_target_checked(&e))/></label>
                 {move || err.get().map(|m| view! { <span class="d-error" role="alert">{format!("error: {m}")}</span> })}
             </div>
             <footer class="d-row" style="flex:none;justify-content:space-between;flex-wrap:nowrap;gap:8px;padding:12px 16px;border-top:1px solid var(--border-default)">

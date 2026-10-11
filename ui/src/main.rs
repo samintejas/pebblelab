@@ -2,6 +2,7 @@ mod api;
 mod fmt;
 mod icons;
 mod pages;
+mod site;
 mod state;
 
 use dots_ui::prelude::*;
@@ -16,13 +17,16 @@ fn main() {
 
 #[component]
 fn App() -> impl IntoView {
+    site::provide();
     view! {
         <DotsStyles font_base="/fonts/"/>
         <style>{include_str!("app.css")}</style>
         <DotsProvider persist_theme="pebblelab:theme">
             <Router>
                 <Routes fallback=|| view! { <Redirect path="/"/> }>
-                    <Route path=path!("/") view=pages::Landing/>
+                    <Route path=path!("/") view=pages::Home/>
+                    <Route path=path!("/account") view=pages::Account/>
+                    <Route path=path!("/account/:tab") view=pages::Account/>
                     <Route path=path!("/signin") view=pages::SignIn/>
                     <Route path=path!("/signup") view=pages::SignUp/>
                     <Route path=path!("/reset") view=pages::Reset/>

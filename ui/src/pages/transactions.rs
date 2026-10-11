@@ -687,11 +687,19 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
         let have = parse_tags(&tags.get());
         app.tags.get().into_iter().filter(|g| g != "transfer" && !have.contains(g)).take(8).collect::<Vec<_>>()
     };
+    // the segmented control holds a String; the panel keeps its &'static str
+    let kind_s = RwSignal::new(kind.get_untracked().to_string());
+    Effect::new(move |_| {
+        let k = kind_s.get();
+        if let Some(v) = ["expense", "income", "transfer"].into_iter().find(|v| *v == k) {
+            if kind.get_untracked() != v {
+                kind.set(v);
+            }
+        }
+    });
     let seg = move |value: &'static str| {
         let disabled = is_transfer != (value == "transfer");
-        view! {
-            <button type="button" class="seg__opt" aria-pressed=move || (kind.get() == value).to_string() disabled=disabled on:click=move |_| kind.set(value)>{value}</button>
-        }
+        view! { <SegOption value=value disabled=disabled>{value}</SegOption> }
     };
     view! {
         <form class="d-rightbar__inner" aria-labelledby="sh-t" on:submit=move |e| { e.prevent_default(); save() }>
@@ -704,7 +712,7 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
                     <span class="d-label">"transaction id"</span>
                     <button type="button" class="d-btn d-btn--ghost d-btn--sm" title="copy transaction id" aria-label="copy transaction id" on:click=move |_| crate::pages::settings::copy(app, uid2.clone())><span style="font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis">{uid.clone()}</span><Ico d=COPY/></button>
                 </div>
-                <div class="seg" role="group" aria-label="kind of transaction">{seg("expense")}{seg("income")}{seg("transfer")}</div>
+                <Segmented value=kind_s label="kind of transaction" size=Size::Lg fill=true>{seg("expense")}{seg("income")}{seg("transfer")}</Segmented>
                 <div class="d-field">
                     <label class="d-label" for="sh-amt">"amount"</label>
                     <div class="d-input amt" style="display:flex;align-items:baseline;gap:8px;height:56px;padding:0 16px;box-sizing:border-box;width:100%">

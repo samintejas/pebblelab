@@ -1,4 +1,5 @@
-# /etc/caddy/Caddyfile: global settings, then one file per site in conf.d (fin.pebblelab.in is deploy/fin.caddy)
+# /etc/caddy/Caddyfile: global settings, then one file per site in conf.d (pebblelab.in is deploy/pebblelab.caddy,
+# fin.pebblelab.in is deploy/fin.caddy). One pebblelab server answers both.
 {
 	admin "unix//run/caddy/admin.socket"
 }

@@ -4,6 +4,7 @@ use leptos_router::hooks::use_navigate;
 
 use crate::api;
 use crate::icons::*;
+use crate::site::use_site;
 
 const HEAT: [f32; 28] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.29, 0.0, 0.34, 0.28, 0.27, 0.0, 0.75, 0.31, 0.34, 0.81, 0.0, 0.31, 0.35, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
@@ -31,7 +32,73 @@ fn Runway(name: &'static str, left: &'static str, paid: &'static str, pct: u32) 
     }
 }
 
-/// `/`: the landing page. Someone already signed in goes straight to their transactions.
+/// `/`: pebblelab's own page at the account's address, fin's everywhere else.
+#[component]
+pub fn Home() -> impl IntoView {
+    let site = use_site();
+    move || {
+        if !site.ready() {
+            ().into_any()
+        } else if site.here() == "account" {
+            view! { <PebbleLanding/> }.into_any()
+        } else {
+            view! { <Landing/> }.into_any()
+        }
+    }
+}
+
+/// pebblelab.in: what pebblelab is, its apps, and the way in. Someone signed in goes to their account.
+#[component]
+fn PebbleLanding() -> impl IntoView {
+    let site = use_site();
+    let nav = use_navigate();
+    if api::load_token().is_some() {
+        nav("/account", Default::default());
+    }
+    view! {
+        <div style="background:var(--bg-base);color:var(--text-primary);min-height:100dvh;display:flex;flex-direction:column">
+            <SkipLink/>
+            <header class="d-appbar">
+                <span style="margin-left:4px;display:flex"><Mark/></span>
+                <span class="d-appbar__title">"pebblelab"</span>
+                <span class="d-appbar__spacer"></span>
+                <ButtonLink href="/signin" size=Size::Sm>"sign in"</ButtonLink>
+            </header>
+            <main id="main" tabindex="-1" style="flex:1">
+                <section class="d-container" style="padding-block:72px;display:flex;flex-direction:column;gap:16px;max-width:880px">
+                    <h1 class="heading-3xl" style="color:var(--text-strong);max-width:20ch">"small, simple apps. one account."</h1>
+                    <p style="color:var(--text-secondary);max-width:60ch">"sign in once and every pebblelab app knows who you are, who your family is, and which ai clients you let in."</p>
+                    <div class="d-row" style="gap:8px">
+                        <ButtonLink href="/signup" variant=ButtonVariant::Primary size=Size::Lg>"create an account"</ButtonLink>
+                        <ButtonLink href="/signin" size=Size::Lg>"sign in"</ButtonLink>
+                    </div>
+                </section>
+                <section class="d-container" style="padding-bottom:64px;max-width:880px;display:flex;flex-direction:column;gap:12px" aria-labelledby="pl-apps">
+                    <h2 class="heading-lg" id="pl-apps" style="color:var(--text-strong)">"apps"</h2>
+                    {move || site.get().apps.into_iter().filter(|a| a.id != "account").map(|a| view! {
+                        <a class="d-card" href=a.url.clone() rel="external" style="text-decoration:none;color:inherit">
+                            <div class="d-card__body d-row" style="gap:12px;flex-wrap:nowrap;align-items:flex-start">
+                                <span class="d-apps__mark" aria-hidden="true"><Mark/></span>
+                                <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                                    <span style="color:var(--text-strong);font-weight:500">{format!("pebblelab/{}", a.name)}</span>
+                                    <span style="color:var(--text-secondary)">{a.summary.clone()}</span>
+                                </span>
+                            </div>
+                        </a>
+                    }).collect_view()}
+                </section>
+            </main>
+            <footer style="border-top:1px solid var(--border-default)">
+                <div class="d-container d-row" style="padding-block:16px;justify-content:space-between;font-size:var(--font-size-sm);color:var(--text-secondary)">
+                    <span>"pebblelab"</span>
+                    <span>"pebblelab.in"</span>
+                </div>
+            </footer>
+        </div>
+    }
+}
+
+/// fin's landing page. Someone already signed in goes straight to their transactions.
 #[component]
 pub fn Landing() -> impl IntoView {
     let nav = use_navigate();
@@ -170,14 +237,14 @@ pub fn Landing() -> impl IntoView {
                 <section style="border-top:1px solid var(--border-default)">
                     <div class="d-container" style="padding-block:64px;display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between">
                         <h2 class="heading-2xl" style="max-width:24ch">"start with one account."</h2>
-                        <ButtonLink href="/signup" variant=ButtonVariant::Primary size=Size::Lg>"create an account"</ButtonLink>
+                        <ButtonLink href="/signup" variant=ButtonVariant::Primary size=Size::Lg>"create a pebblelab account"</ButtonLink>
                     </div>
                 </section>
             </main>
             <footer style="border-top:1px solid var(--border-default)">
                 <div class="d-container d-row" style="padding-block:16px;justify-content:space-between;font-size:var(--font-size-sm);color:var(--text-secondary)">
                     <span>"pebblelab/fin"</span>
-                    <span>"a pebblelab.in app"</span>
+                    <span>"one of the pebblelab apps"</span>
                 </div>
             </footer>
         </div>

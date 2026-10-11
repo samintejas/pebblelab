@@ -1,4 +1,6 @@
+mod account;
 mod accounts;
+pub mod apps;
 mod assets;
 mod auth;
 mod insights;
@@ -8,11 +10,12 @@ mod shell;
 mod subscriptions;
 mod transactions;
 
+pub use account::Account;
 pub use accounts::{AccountPage, Accounts, NewAccount};
 pub use assets::{AssetPanel, Assets};
 pub use auth::{AuthCallback, Reset, SignIn, SignUp};
 pub use insights::Insights;
-pub use landing::Landing;
+pub use landing::Home;
 pub use settings::Settings;
 pub use shell::AppShell;
 pub use subscriptions::{SubPanel, Subscriptions};

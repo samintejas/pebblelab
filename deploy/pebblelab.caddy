@@ -1,0 +1,5 @@
+pebblelab.in {
+	# the pebblelab account: sign-in, profile, family, tokens. The same server as fin; the address says which.
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy 127.0.0.1:3000
+}

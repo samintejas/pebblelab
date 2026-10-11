@@ -1,13 +1,39 @@
-# pebblelab/fin
+# pebblelab
 
-Part of [Pebble Lab](https://pebblelab.in), a collection of small, simple apps. This one lives at `fin.pebblelab.in`.
+[Pebble Lab](https://pebblelab.in) is a collection of small, simple apps under one account. The **pebblelab
+account** (at `pebblelab.in`) is who you are, how you sign in, your family and the tokens you give AI clients; every
+app uses it. **fin** (at `fin.pebblelab.in`) is the first app.
 
-A household money tracker. Accounts (bank, credit card, loan, investment), transactions with tags, a family that can
+## the account and its apps
+
+- **One sign-in.** An app with no session sends the browser to the account (`/signin?app=fin`). Once you are signed
+  in there, the account asks for a one-time code (`POST /api/auth/handoff`) and sends the browser to the app's
+  `/auth/callback#code=…`, which swaps it for a session of the app's own (`/api/auth/redeem`). Already signed in to the
+  account, this is instant.
+- **Sessions belong to the account or an app.** An account session may do anything. An app session holds that app's
+  scopes and can read who you are, but the account (profile, password, family, tokens, sessions) changes only in the
+  account. An app session ends with the account session that opened it, and signing out of either signs this
+  browser out of both. `GET /api/sessions` lists them; the account's security page ends them one by one.
+- **Family is the account's.** Every app can use it; in fin, family members share accounts and hold joint ones.
+- **Tokens name their app.** Connector scopes are `fin:read`, `fin:transactions`, `fin:add`, `fin:edit` (the old
+  `read`… still work and were renamed by migration 0008). A token never changes the account.
+- **One binary serves everything.** `PEBBLELAB_PUBLIC_URL` is the account's address, `PEBBLELAB_FIN_URL` fin's; the
+  address a request comes to decides which app the page is (`GET /api/site`). Leave `PEBBLELAB_FIN_URL` unset and
+  one address serves all of it: the account at `/account`, fin at its usual paths. That is how development works.
+  To try two addresses locally: `PEBBLELAB_PUBLIC_URL=http://account.localhost:3000 PEBBLELAB_FIN_URL=http://fin.localhost:3000`
+  (browsers send `*.localhost` to this machine).
+
+The code follows the same line: `crates/core/src/account/` and `crates/core/src/fin/`; in the web app,
+`ui/src/pages/account.rs` and the rest.
+
+## fin
+
+`pebblelab/fin` is a household money tracker. Accounts (bank, credit card, loan, investment), transactions with tags, a family that can
 share or co-own accounts, insights, and an assistant you can ask in plain words.
 
 The backend is headless: one binary, `pebblelab`, is a **CLI**, a **REST API** and an **MCP server** over a Postgres
 database (in Docker). The web app is a separate Leptos (client side) build served by the same binary, on the
-[dots-ui](https://crates.io/crates/dots-ui) design system.
+[dots-ui](https://github.com/samintejas/dots-ui) design system. One build holds the account and fin.
 
 ```
 crates/api      wire types shared by everything (money, loan maths). No I/O. The UI uses it too.
@@ -77,14 +103,14 @@ pebblelab summary
 pebblelab ask "when do my loans end?"
 pebblelab family create "rao family"
 pebblelab family invite                     # a one-time code; the other person runs `family join <code>`
-pebblelab token create claude --scopes read,transactions,add
+pebblelab token create claude --scopes fin:read,fin:transactions,fin:add
 ```
 
 ## rest
 
 `/api/*`, JSON, `Authorization: Bearer <token>`. Amounts are decimal strings (`"3240.50"`) in major units. Sign in
 at `POST /api/auth/signin` for a session token, or create a connector token (profile, connectors).
-Routes: `auth/{signup,signin,signout,signout-all,reset,reset/confirm,providers,redeem}`, `auth/{google,github}/{start,callback}`, `me` (also delete), `me/password`, `export.csv`,
+Routes: `site`, `auth/{signup,signin,signout,signout-all,reset,reset/confirm,providers,redeem,handoff}`, `sessions` (and `sessions/{id}`), `auth/{google,github}/{start,callback}`, `me` (also delete), `me/password`, `export.csv`,
 `family` (create, delete), `family/{invite,join,leave}`, `accounts` (and `accounts/{id}/leave`), `transactions` (filter, sort, page, in/out
 totals), `transfers`, `transactions/{id}/attachments`, `subscriptions`, `assets`, `tags`, `insights`, `ask`, `notifications`, `connectors`.
 
@@ -94,7 +120,7 @@ totals), `transfers`, `transactions/{id}/attachments`, `subscriptions`, `assets`
 Tools: `list_accounts`, `create_account`, `update_account`, `list_transactions`, `add_transaction`,
 `transfer_money`, `update_transaction`, `delete_transaction`, `list_subscriptions`, `add_subscription`, `update_subscription`, `delete_subscription`, `list_assets`, `add_asset`,
 `update_asset`, `delete_asset`, `list_tags`, `get_insights`, `ask_pebblelab`.
-A token has scopes: `read`, `transactions` (read them), `add`, `edit`; a tool outside them reports the missing scope.
+A token has scopes: `fin:read`, `fin:transactions` (read them), `fin:add`, `fin:edit`; a tool outside them reports the missing scope.
 
 ## model
 
