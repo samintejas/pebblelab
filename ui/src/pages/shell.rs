@@ -250,24 +250,24 @@ fn Notifications() -> impl IntoView {
                             if list.is_empty() {
                                 return view! { <div style="padding:12px 16px;border-top:1px solid var(--border-default);color:var(--text-secondary)">"nothing yet. card due dates, emis and family activity show up here."</div> }.into_any();
                             }
-                            let nav = nav.clone();
-                            list.into_iter().map(|n| {
+                            view! { <ul class="d-feed" aria-label="notifications">{list.into_iter().map(|n| {
                                 let nav = nav.clone();
                                 let (id, link, unread) = (n.id, link_path(&n.link), !n.read);
                                 view! {
-                                    <button type="button" class="nt" on:click=move |_| {
+                                    <li><button type="button" class="d-feed__item" data-unread=unread.then_some("") on:click=move |_| {
                                         if unread { read(Some(id)); }
                                         open.set(false);
                                         if let Some(l) = &link { nav(l, Default::default()); }
                                     }>
-                                        <span class="nt__dot" aria-hidden="true" style=if unread { "background:var(--accent-primary)" } else { "background:transparent" }></span>
-                                        <span style=if unread { "color:var(--text-strong)" } else { "color:var(--text-primary)" }>{n.title.clone()}{unread.then(|| view! { <span class="d-sr">", unread"</span> })}</span>
-                                        <span style="color:var(--text-secondary);font-size:var(--font-size-xs)">{when(&n.created_at)}</span>
-                                        <span></span>
-                                        <span style="grid-column:2 / 4;color:var(--text-secondary)">{n.body.clone()}</span>
-                                    </button>
+                                        <span class="d-feed__mark" aria-hidden="true"></span>
+                                        <span class="d-feed__body">
+                                            <span class="d-feed__title">{unread.then(|| view! { <span class="d-sr">"unread: "</span> })}{n.title.clone()}</span>
+                                            <span class="d-feed__text">{n.body.clone()}</span>
+                                        </span>
+                                        <span class="d-feed__time">{when(&n.created_at)}</span>
+                                    </button></li>
                                 }
-                            }).collect_view().into_any()
+                            }).collect_view()}</ul> }.into_any()
                         }}
                         </div>
                         <div class="d-row" style="justify-content:flex-end;flex-wrap:nowrap;padding:8px 8px 8px 16px;border-top:1px solid var(--border-default)">

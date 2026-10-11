@@ -810,12 +810,7 @@ pub fn NewAccount() -> impl IntoView {
                 </div>
                 <a class="d-btn d-btn--ghost" href="/accounts">"cancel"</a>
             </div>
-            <ol class="aj-steps" aria-label="steps">
-                {["kind", "details", "review"].into_iter().enumerate().map(|(i, l)| {
-                    let n = i as u8 + 1;
-                    view! { <li data-s={move || if step.get() == n { "on" } else if step.get() > n { "done" } else { "todo" }} aria-current=move || (step.get() == n).then_some("step")><b aria-hidden="true">{n.to_string()}</b><span>{l}</span></li> }
-                }).collect_view()}
-            </ol>
+            <Stepper steps=vec!["kind".to_string(), "details".to_string(), "review".to_string()] current=Signal::derive(move || step.get() as usize - 1)/>
             {move || match step.get() {
                 1 => view! {
                     <fieldset style="margin:0;padding:0;border:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:12px">

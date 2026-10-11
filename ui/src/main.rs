@@ -21,7 +21,7 @@ fn App() -> impl IntoView {
         <style>{include_str!("app.css")}</style>
         <DotsProvider persist_theme="pebblelab:theme">
             <Router>
-                <Routes fallback=|| view! { <Redirect path="/"/> }>
+                <Routes fallback=|| view! { <StatusPage kind=StatusKind::NotFound title="you are lost" foot="pebblelab/fin"><a class="d-link" href="/">"click here to go home"</a></StatusPage> }>
                     <Route path=path!("/") view=pages::Landing/>
                     <Route path=path!("/signin") view=pages::SignIn/>
                     <Route path=path!("/signup") view=pages::SignUp/>

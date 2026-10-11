@@ -690,7 +690,7 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
     let seg = move |value: &'static str| {
         let disabled = is_transfer != (value == "transfer");
         view! {
-            <button type="button" class="seg__opt" aria-pressed=move || (kind.get() == value).to_string() disabled=disabled on:click=move |_| kind.set(value)>{value}</button>
+            <button type="button" class="d-seg__opt" role="radio" aria-checked=move || (kind.get() == value).to_string() disabled=disabled on:click=move |_| kind.set(value)>{value}</button>
         }
     };
     view! {
@@ -704,7 +704,7 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
                     <span class="d-label">"transaction id"</span>
                     <button type="button" class="d-btn d-btn--ghost d-btn--sm" title="copy transaction id" aria-label="copy transaction id" on:click=move |_| crate::pages::settings::copy(app, uid2.clone())><span style="font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis">{uid.clone()}</span><Ico d=COPY/></button>
                 </div>
-                <div class="seg" role="group" aria-label="kind of transaction">{seg("expense")}{seg("income")}{seg("transfer")}</div>
+                <div class="d-seg d-seg--lg d-seg--fill" role="radiogroup" aria-label="kind of transaction">{seg("expense")}{seg("income")}{seg("transfer")}</div>
                 <div class="d-field">
                     <label class="d-label" for="sh-amt">"amount"</label>
                     <div class="d-input amt" style="display:flex;align-items:baseline;gap:8px;height:56px;padding:0 16px;box-sizing:border-box;width:100%">

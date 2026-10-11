@@ -46,15 +46,13 @@ pub fn Settings() -> impl IntoView {
     let def = move || *TABS.iter().find(|x| x.0 == tab.get()).unwrap_or(&TABS[0]);
     view! {
         <div class="set">
-            <div class="set__nav">
+            <nav class="d-secnav" aria-label="settings">
                 <h1 class="heading-xl" style="padding:0 12px 12px">"settings"</h1>
-                <div role="tablist" aria-label="settings" aria-orientation="vertical" style="display:contents">
-                    {TABS.iter().map(|(key, label, icon, _)| view! {
-                        <a class="set__tab" role="tab" href=format!("/settings/{key}") aria-selected=move || (tab.get() == *key).to_string()><Ico d=icon/>{*label}</a>
-                    }).collect_view()}
-                </div>
-            </div>
-            <div class="set__panel" role="tabpanel" aria-label=move || def().1>
+                {TABS.iter().map(|(key, label, icon, _)| view! {
+                    <a class="d-secnav__item" href=format!("/settings/{key}") aria-current=move || (tab.get() == *key).then_some("page")><Ico d=icon/><span>{*label}</span></a>
+                }).collect_view()}
+            </nav>
+            <div class="set__panel" aria-label=move || def().1>
                 <div style="display:flex;flex-direction:column;gap:4px">
                     <h2 class="heading-lg" style="color:var(--text-strong)">{move || def().1}</h2>
                     <span style="color:var(--text-secondary)">{move || def().3}</span>
@@ -183,7 +181,7 @@ fn Prefs() -> impl IntoView {
     let user = move || app.me.get().map(|m| m.user);
     let toggle = move |key: &'static str, on: bool| patch_me(app, serde_json::json!({ key: on }), move |r| if let Err(m) = r { app.error(m) });
     let switch = move |label: &'static str, key: &'static str, get: fn(&User) -> bool| view! {
-        <label class="set__row"><span>{label}</span>
+        <label class="d-setrow"><span class="d-setrow__text"><b>{label}</b></span>
             <input type="checkbox" role="switch" class="d-switch" prop:checked=move || user().is_some_and(|u| get(&u)) on:change=move |e| toggle(key, event_target_checked(&e))/>
         </label>
     };
@@ -195,23 +193,23 @@ fn Prefs() -> impl IntoView {
         });
     };
     view! {
-        <div class="set__grid">
+        <div class="d-setgrid">
             <section class="d-card" aria-labelledby="pr-t">
                 <header class="d-card__head"><h2 class="d-card__title" id="pr-t">"display"</h2></header>
                 <div class="d-card__body">
-                    <div class="set__row">
-                        <label for="pr-cur">"currency"</label>
+                    <div class="d-setrow">
+                        <span class="d-setrow__text"><label for="pr-cur">"currency"</label></span>
                         <span class="d-select" style="width:140px">
                             <select class="d-input" id="pr-cur" on:change=move |e| patch_me(app, serde_json::json!({ "currency": event_target_value(&e) }), move |r| if let Err(m) = r { app.error(m) })>
                                 {[("inr", "inr, ₹"), ("usd", "usd, $"), ("eur", "eur, €")].into_iter().map(|(v, l)| view! { <option value=v selected=move || app.currency() == v>{l}</option> }).collect_view()}
                             </select>
                         </span>
                     </div>
-                    <div class="set__row">
-                        <span id="pr-th">"theme"</span>
-                        <div class="seg" role="group" aria-labelledby="pr-th" style="width:140px">
-                            <button type="button" class="seg__opt" aria-pressed=move || (theme.get() == Theme::Dark).to_string() aria-label="dark" title="dark" on:click=move |_| theme.set(Theme::Dark)><Ico d=MOON/></button>
-                            <button type="button" class="seg__opt" aria-pressed=move || (theme.get() == Theme::Light).to_string() aria-label="light" title="light" on:click=move |_| theme.set(Theme::Light)><Ico d=SUN/></button>
+                    <div class="d-setrow">
+                        <span class="d-setrow__text"><b id="pr-th">"theme"</b></span>
+                        <div class="d-seg" role="radiogroup" aria-labelledby="pr-th" style="width:140px">
+                            <button type="button" class="d-seg__opt" role="radio" aria-checked=move || (theme.get() == Theme::Dark).to_string() aria-label="dark" title="dark" on:click=move |_| theme.set(Theme::Dark)><Ico d=MOON/></button>
+                            <button type="button" class="d-seg__opt" role="radio" aria-checked=move || (theme.get() == Theme::Light).to_string() aria-label="light" title="light" on:click=move |_| theme.set(Theme::Light)><Ico d=SUN/></button>
                         </div>
                     </div>
                 </div>
@@ -227,7 +225,7 @@ fn Prefs() -> impl IntoView {
             <section class="d-card" aria-labelledby="dx-t">
                 <header class="d-card__head"><h2 class="d-card__title" id="dx-t">"your data"</h2></header>
                 <div class="d-card__body">
-                    <div class="set__row"><span>"accounts and transactions, as csv"</span><button type="button" class="d-btn d-btn--secondary" on:click=export><Ico d=DOWNLOAD/>"export"</button></div>
+                    <div class="d-setrow"><span class="d-setrow__text"><b>"accounts and transactions, as csv"</b></span><button type="button" class="d-btn d-btn--secondary" on:click=export><Ico d=DOWNLOAD/>"export"</button></div>
                 </div>
             </section>
         </div>
@@ -278,7 +276,7 @@ fn Security() -> impl IntoView {
         });
     };
     view! {
-        <div class="set__grid">
+        <div class="d-setgrid">
             <form class="d-card" aria-labelledby="pw-t" on:submit=move |e| { e.prevent_default(); change() }>
                 <header class="d-card__head"><h2 class="d-card__title" id="pw-t">"password"</h2></header>
                 <div class="d-card__body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px">
@@ -298,13 +296,13 @@ fn Security() -> impl IntoView {
             <section class="d-card" aria-labelledby="sec-t">
                 <header class="d-card__head"><h2 class="d-card__title" id="sec-t">"sessions"</h2></header>
                 <div class="d-card__body">
-                    <div class="set__row"><span>"sign out everywhere, including this device"</span><button type="button" class="d-btn d-btn--secondary" on:click=out_all><Ico d=SIGN_OUT/>"sign out all"</button></div>
+                    <div class="d-setrow"><span class="d-setrow__text"><b>"sign out everywhere, including this device"</b></span><button type="button" class="d-btn d-btn--secondary" on:click=out_all><Ico d=SIGN_OUT/>"sign out all"</button></div>
                 </div>
             </section>
             <section class="d-card" aria-labelledby="dl-t">
                 <header class="d-card__head"><h2 class="d-card__title" id="dl-t">"delete your account"</h2></header>
                 <div class="d-card__body">
-                    <div class="set__row"><span>"removes your sign-in, accounts and transactions. this cannot be undone."</span><button type="button" class="d-btn d-btn--danger" on:click=move |_| confirm.set(true)><Ico d=TRASH/>"delete"</button></div>
+                    <div class="d-setrow"><span class="d-setrow__text"><b>"removes your sign-in, accounts and transactions. this cannot be undone."</b></span><button type="button" class="d-btn d-btn--danger" on:click=move |_| confirm.set(true)><Ico d=TRASH/>"delete"</button></div>
                 </div>
             </section>
         </div>
@@ -610,7 +608,7 @@ fn Connectors() -> impl IntoView {
                         </div>
                         <div>
                             {PERMS.map(|(label, scope)| view! {
-                                <label class="set__row"><span>{label}</span>
+                                <label class="d-setrow"><span class="d-setrow__text"><b>{label}</b></span>
                                     <input type="checkbox" role="switch" class="d-switch" prop:checked=move || new_scopes.with(|l| l.iter().any(|s| s == scope))
                                         on:change=move |e| {
                                             let on = event_target_checked(&e);
@@ -645,7 +643,7 @@ fn Connectors() -> impl IntoView {
                         </header>
                         <div class="d-card__body">
                             {PERMS.map(|(label, scope)| view! {
-                                <label class="set__row"><span>{label}</span>
+                                <label class="d-setrow"><span class="d-setrow__text"><b>{label}</b></span>
                                     <input type="checkbox" role="switch" class="d-switch"
                                         prop:checked=move || list.with(|l| l.iter().any(|x| x.id == id && x.scopes.iter().any(|s| s == scope)))
                                         on:change=move |e| set_scope(id, scope, event_target_checked(&e))/>
