@@ -7,3 +7,4 @@
 .playwright-mcp
 .env
 .env.production
+/statements
