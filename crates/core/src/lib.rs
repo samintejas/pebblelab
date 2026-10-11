@@ -1,18 +1,16 @@
 //! pebblelab's business logic. Every front end (REST, MCP, CLI) calls these functions and nothing else touches
 //! the database, so a rule lives in exactly one place.
+//!
+//! [`account`] is the pebblelab account every app shares; [`fin`] is the money tracker, the first app under it.
 
-mod accounts;
-mod assets;
-mod auth;
+mod account;
 mod error;
-mod family;
-mod insights;
+mod fin;
 mod notify;
-mod reset;
-mod scheduler;
-mod social;
-mod subscriptions;
-mod transactions;
+
+// the modules keep their short paths inside the crate
+pub(crate) use account::{auth, social};
+pub(crate) use fin::{scheduler, transactions};
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -21,7 +19,7 @@ use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 pub use error::{Error, Result};
-pub use reset::ResetTicket;
+pub use account::reset::ResetTicket;
 pub use scheduler::JobReport;
 pub use social::{ExternalIdentity, PROVIDERS};
 pub use transactions::INLINE_TYPES;
@@ -50,23 +48,62 @@ pub struct Store {
     pub(crate) cfg: Arc<Config>,
 }
 
-/// Who is acting and what they may do. A web session may do anything; a connector token only its scopes.
+/// Who is acting and what they may do.
+///
+/// - An **account session** (signed in to the pebblelab account, or the CLI acting as a person) may do
+///   anything: manage the account and use every app.
+/// - An **app session** (the account handed the browser to `fin`) holds that app's scopes and may read who
+///   you are, but changes the account only through the account.
+/// - A **connector token** holds only the scopes it was given, and is never a person at a keyboard.
 #[derive(Debug, Clone)]
 pub struct Caller {
     pub user_id: i64,
     scopes: Vec<String>,
     interactive: bool,
+    account: bool,
+    /// The session's token id, for sessions.
+    session: Option<i64>,
 }
 
 impl Caller {
-    /// Everything: the web app, and the CLI acting as a person.
+    /// Everything: an account session, and the CLI acting as a person.
     pub fn full(user_id: i64) -> Self {
-        Caller { user_id, scopes: api::SCOPES.iter().map(|s| s.to_string()).collect(), interactive: true }
+        Caller { user_id, scopes: api::SCOPES.iter().map(|s| s.to_string()).collect(), interactive: true, account: true, session: None }
+    }
+
+    /// A session opened for one app: its scopes, a person at a keyboard, no say over the account.
+    pub fn app_session(user_id: i64, app: &str) -> Self {
+        Caller { user_id, scopes: api::session_scopes(app), interactive: true, account: app == api::ACCOUNT.id, session: None }
     }
 
     /// An api token: only its scopes, and never a person at a keyboard.
     pub fn scoped(user_id: i64, scopes: Vec<String>) -> Self {
-        Caller { user_id, scopes, interactive: false }
+        Caller { user_id, scopes, interactive: false, account: false, session: None }
+    }
+
+    pub(crate) fn in_session(mut self, id: i64) -> Self {
+        self.session = Some(id);
+        self
+    }
+
+    /// The token id of the session making the call, if it is one.
+    pub fn session(&self) -> Option<i64> {
+        self.session
+    }
+
+    /// May change the account: profile, password, family, tokens, sessions.
+    pub fn is_account(&self) -> bool {
+        self.account
+    }
+
+    pub fn need_account(&self) -> Result<()> {
+        if self.account {
+            Ok(())
+        } else if self.interactive {
+            Err(Error::Forbidden("change this in your pebblelab account".into()))
+        } else {
+            Err(Error::Forbidden("a connector token cannot change the account".into()))
+        }
     }
 
     /// A person signed in (the web app, or the CLI as them), not a token that was handed to something.

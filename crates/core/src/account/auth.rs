@@ -71,6 +71,20 @@ pub(crate) fn check_password(pw: &str) -> Result<()> {
     Ok(())
 }
 
+/// Scopes as stored, `fin:read`; the names from before scopes named their app (`read`) still work.
+pub(crate) fn check_scopes(raw: &[String]) -> Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for s in raw {
+        let Some(full) = scope(s) else {
+            return Err(Error::bad(format!("unknown scope '{s}', use one of {SCOPES:?}")));
+        };
+        if !out.iter().any(|x| x == full) {
+            out.push(full.to_string());
+        }
+    }
+    Ok(out)
+}
+
 pub(crate) fn check_email(e: &str) -> Result<String> {
     let e = clean(e).to_lowercase();
     match e.split_once('@') {
@@ -132,22 +146,36 @@ impl Store {
         }
     }
 
+    /// Sign in to the pebblelab account.
     pub(crate) async fn open_session(&self, user_id: i64) -> Result<Session> {
+        self.open_session_for(user_id, ACCOUNT.id, None).await
+    }
+
+    /// A session for one app, opened by the account session `parent` (signing that one out ends this too).
+    pub(crate) async fn open_session_for(&self, user_id: i64, app: &str, parent: Option<i64>) -> Result<Session> {
         let token = new_token("trs");
-        sqlx::query("INSERT INTO tokens (user_id, kind, token_hash, tail) VALUES ($1, 'session', $2, $3)")
+        sqlx::query("INSERT INTO tokens (user_id, kind, token_hash, tail, app, parent_id) VALUES ($1, 'session', $2, $3, $4, $5)")
             .bind(user_id)
             .bind(hash_token(&token))
             .bind(&token[token.len() - 4..])
+            .bind(app)
+            .bind(parent)
             .execute(&self.pool)
             .await?;
         Ok(Session { token, user: self.user(user_id).await? })
     }
 
+    /// Sign out of this browser: the session, the account session that opened it, and every app session
+    /// that one opened. Like any account under one roof, signing out of one app signs you out of all of
+    /// them here; other browsers stay signed in.
     pub async fn sign_out(&self, token: &str) -> Result<()> {
-        sqlx::query("DELETE FROM tokens WHERE token_hash = $1 AND kind = 'session'")
-            .bind(hash_token(token))
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "DELETE FROM tokens WHERE kind = 'session' AND id IN \
+             (SELECT COALESCE(parent_id, id) FROM tokens WHERE token_hash = $1 AND kind = 'session')",
+        )
+        .bind(hash_token(token))
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
@@ -155,7 +183,7 @@ impl Store {
     /// use, and in any case after 180 days.
     pub async fn authenticate(&self, token: &str) -> Result<Caller> {
         let row = sqlx::query(
-            "SELECT id, user_id, kind, scopes FROM tokens WHERE token_hash = $1 \
+            "SELECT id, user_id, kind, scopes, app FROM tokens WHERE token_hash = $1 \
              AND (kind = 'connector' OR (created_at > utc_text(now() - interval '180 days') \
                   AND COALESCE(last_used_at, created_at) > utc_text(now() - interval '30 days')))",
         )
@@ -173,7 +201,9 @@ impl Store {
             let scopes: String = row.get("scopes");
             Ok(Caller::scoped(user_id, scopes.split(',').filter(|s| !s.is_empty()).map(String::from).collect()))
         } else {
-            Ok(Caller::full(user_id))
+            let app: String = row.get("app");
+            let caller = if app == ACCOUNT.id { Caller::full(user_id) } else { Caller::app_session(user_id, &app) };
+            Ok(caller.in_session(id))
         }
     }
 
@@ -199,8 +229,15 @@ impl Store {
         Ok(Me { user: self.user(c.user_id).await?, family: self.family(c.user_id).await? })
     }
 
+    /// Change the profile. Who you are (name, initials, email, phone, picture) belongs to the account; the
+    /// currency and what to be told about are fin's preferences, which a fin session may change.
     pub async fn update_profile(&self, c: &Caller, b: UpdateProfile) -> Result<User> {
-        c.need("edit")?;
+        let identity = b.name.is_some() || b.initials.is_some() || b.email.is_some() || b.phone.is_some() || b.picture.is_some();
+        if identity {
+            c.need_account()?;
+        } else {
+            c.need(FIN_EDIT)?;
+        }
         let u = self.user(c.user_id).await?;
         let name = b.name.map(|n| clean(&n).to_lowercase()).unwrap_or(u.name.clone());
         if name.is_empty() {
@@ -251,7 +288,7 @@ impl Store {
     }
 
     pub async fn change_password(&self, c: &Caller, b: ChangePassword) -> Result<()> {
-        c.need("edit")?;
+        c.need_account()?;
         check_password(&b.new)?;
         let hash: String = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
             .bind(c.user_id)
@@ -282,15 +319,12 @@ impl Store {
     // ---- connectors: api tokens for Claude, scripts and the CLI -------------------------------------
 
     pub async fn create_connector(&self, c: &Caller, b: NewConnector) -> Result<CreatedConnector> {
-        c.need("edit")?;
+        c.need_account()?;
         let name = clean(&b.name);
         if name.is_empty() {
             return Err(Error::bad("name the connector"));
         }
-        let scopes: Vec<String> = if b.scopes.is_empty() { vec!["read".into(), "transactions".into()] } else { b.scopes };
-        if let Some(bad) = scopes.iter().find(|s| !SCOPES.contains(&s.as_str())) {
-            return Err(Error::bad(format!("unknown scope '{bad}', use one of {SCOPES:?}")));
-        }
+        let scopes = if b.scopes.is_empty() { vec![FIN_READ.to_string(), FIN_TRANSACTIONS.to_string()] } else { check_scopes(&b.scopes)? };
         let token = new_token("trc");
         let id = sqlx::query("INSERT INTO tokens (user_id, kind, name, token_hash, tail, scopes) VALUES ($1, 'connector', $2, $3, $4, $5) RETURNING id")
             .bind(c.user_id)
@@ -306,6 +340,7 @@ impl Store {
     }
 
     pub async fn connectors(&self, c: &Caller) -> Result<Vec<Connector>> {
+        c.need_account()?;
         let rows = sqlx::query("SELECT id, name, scopes, tail, created_at, last_used_at FROM tokens WHERE user_id = $1 AND kind = 'connector' ORDER BY id")
             .bind(c.user_id)
             .fetch_all(&self.pool)
@@ -325,12 +360,10 @@ impl Store {
 
     /// Change what a connector token may do, without making a new token.
     pub async fn update_connector(&self, c: &Caller, id: i64, b: UpdateConnector) -> Result<Connector> {
-        c.need("edit")?;
-        if let Some(bad) = b.scopes.iter().find(|s| !SCOPES.contains(&s.as_str())) {
-            return Err(Error::bad(format!("unknown scope '{bad}', use one of {SCOPES:?}")));
-        }
+        c.need_account()?;
+        let scopes = check_scopes(&b.scopes)?;
         let n = sqlx::query("UPDATE tokens SET scopes = $1 WHERE id = $2 AND user_id = $3 AND kind = 'connector'")
-            .bind(b.scopes.join(","))
+            .bind(scopes.join(","))
             .bind(id)
             .bind(c.user_id)
             .execute(&self.pool)
@@ -342,8 +375,10 @@ impl Store {
         self.connectors(c).await?.into_iter().find(|x| x.id == id).ok_or(Error::NotFound("connector"))
     }
 
-    /// Sign out everywhere, this device included. Connector tokens keep working.
+    /// Sign out everywhere, this device included, from the account and every app. Connector tokens keep
+    /// working.
     pub async fn sign_out_all(&self, c: &Caller) -> Result<()> {
+        c.need_account()?;
         sqlx::query("DELETE FROM tokens WHERE user_id = $1 AND kind = 'session'").bind(c.user_id).execute(&self.pool).await?;
         Ok(())
     }
@@ -352,7 +387,7 @@ impl Store {
     /// place in a family. Accounts shared with other owners stay with those owners. Needs the password.
     /// All or nothing. Cannot be undone.
     pub async fn delete_user(&self, c: &Caller, password: &str) -> Result<()> {
-        c.need("edit")?;
+        c.need_account()?;
         let hash: String = sqlx::query("SELECT password_hash FROM users WHERE id = $1").bind(c.user_id).fetch_one(&self.pool).await?.get(0);
         if !verify_password(password, &hash) {
             return Err(Error::Forbidden("password is wrong".into()));
@@ -385,7 +420,7 @@ impl Store {
     }
 
     pub async fn revoke_connector(&self, c: &Caller, id: i64) -> Result<()> {
-        c.need("edit")?;
+        c.need_account()?;
         let n = sqlx::query("DELETE FROM tokens WHERE id = $1 AND user_id = $2 AND kind = 'connector'")
             .bind(id)
             .bind(c.user_id)

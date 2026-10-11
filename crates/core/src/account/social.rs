@@ -130,15 +130,16 @@ impl Store {
         Ok(code)
     }
 
-    /// Swap a one-time code from a provider sign-in for a session.
+    /// Swap a one-time code for a session: an account session after a provider sign-in, or an app session
+    /// after the account handed the browser to that app.
     pub async fn redeem_login_code(&self, code: &str) -> Result<Session> {
-        let user_id: i64 = sqlx::query("DELETE FROM login_codes WHERE code_hash = $1 AND created_at > utc_text(now() - interval '2 minutes') RETURNING user_id")
+        let row = sqlx::query("DELETE FROM login_codes WHERE code_hash = $1 AND created_at > utc_text(now() - interval '2 minutes') RETURNING user_id, app, parent_id")
             .bind(hash(code.trim()))
             .fetch_optional(&self.pool)
             .await?
-            .ok_or(Error::Unauthorized)?
-            .get(0);
-        self.open_session(user_id).await
+            .ok_or(Error::Unauthorized)?;
+        let (user_id, app, parent): (i64, String, Option<i64>) = (row.get(0), row.get(1), row.get(2));
+        self.open_session_for(user_id, &app, parent).await
     }
 
     /// The providers this person has signed in with.

@@ -70,7 +70,7 @@ impl Store {
     }
 
     pub async fn insights(&self, c: &Caller, q: InsightsQuery) -> Result<Insights> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         let now = self.today();
         let window = q.days.unwrap_or(30).clamp(1, 365) as i64;
         let mut accounts = self.accounts(c, false).await?;
@@ -166,7 +166,7 @@ impl Store {
     /// "ask pebblelab": answers a plain question from the caller's own data. Rule based on purpose: it only
     /// states figures it can compute, and says so when it cannot.
     pub async fn ask(&self, c: &Caller, question: &str) -> Result<String> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         let q = question.to_lowercase();
         let ins = self.insights(c, InsightsQuery::default()).await?;
         let cur = self.user(c.user_id).await?.currency;

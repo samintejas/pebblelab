@@ -237,8 +237,8 @@ async fn profile_sessions_and_deleting_yourself() {
     assert!(csv.contains("salary") && csv.contains("-10.00"), "{csv}");
 
     let made = s.create_connector(&c, NewConnector { name: "mcp".into(), scopes: vec!["read".into()] }).await.unwrap();
-    let up = s.update_connector(&c, made.connector.id, UpdateConnector { scopes: vec!["read".into(), "add".into()] }).await.unwrap();
-    assert_eq!(up.scopes, vec!["read", "add"]);
+    let up = s.update_connector(&c, made.connector.id, UpdateConnector { scopes: vec![FIN_READ.into(), FIN_ADD.into()] }).await.unwrap();
+    assert_eq!(up.scopes, vec![FIN_READ, FIN_ADD]);
 
     s.sign_out_all(&c).await.unwrap();
     assert!(matches!(s.authenticate(&sess.token).await, Err(Error::Unauthorized)));

@@ -93,8 +93,76 @@ const APP_CSP: &str = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval';
 /// How long a request may take.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oauth>, mailer: Arc<Mailer>, public_url: String) -> Router {
+/// Where the account and each app live. One binary serves them all; the address a request came to says which
+/// app the web page should be.
+#[derive(Clone, Debug)]
+pub struct Sites {
+    pub account: String,
+    pub fin: String,
+}
+
+impl Sites {
+    /// The account at `account`, fin at `fin` (or the same address).
+    pub fn new(account: &str, fin: Option<&str>) -> Self {
+        let clean = |u: &str| u.trim().trim_end_matches('/').to_string();
+        let account = clean(account);
+        Sites { fin: fin.map(clean).filter(|f| !f.is_empty()).unwrap_or_else(|| account.clone()), account }
+    }
+
+    /// Everything at one address.
+    #[cfg(test)]
+    pub fn single(url: &str) -> Self {
+        Sites::new(url, None)
+    }
+
+    pub fn url(&self, app: &str) -> Option<&str> {
+        match app {
+            "account" => Some(&self.account),
+            "fin" => Some(&self.fin),
+            _ => None,
+        }
+    }
+
+    fn host(url: &str) -> &str {
+        let rest = url.split_once("://").map(|x| x.1).unwrap_or(url);
+        rest.split('/').next().unwrap_or(rest)
+    }
+
+    /// Which app the address `host` serves: `account`, `fin`, or `all` when one address serves everything (or
+    /// the request came to an address neither is configured at, like 127.0.0.1 behind a proxy).
+    pub fn here(&self, host: &str) -> &'static str {
+        let host = host.trim().to_lowercase();
+        let (a, f) = (Sites::host(&self.account).to_lowercase(), Sites::host(&self.fin).to_lowercase());
+        if a == f {
+            "all"
+        } else if host == a {
+            "account"
+        } else if host == f {
+            "fin"
+        } else {
+            "all"
+        }
+    }
+
+    pub fn site(&self, host: &str) -> Site {
+        Site {
+            here: self.here(host).to_string(),
+            account_url: self.account.clone(),
+            apps: APPS
+                .iter()
+                .map(|a| SiteApp { id: a.id.into(), name: a.name.into(), summary: a.summary.into(), icon: a.icon.into(), url: self.url(a.id).unwrap_or_default().to_string() })
+                .collect(),
+        }
+    }
+}
+
+pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oauth>, mailer: Arc<Mailer>, sites: Sites) -> Router {
+    let public_url = sites.account.clone();
     let api = Router::new()
+        .route("/site", get(site))
+        .route("/auth/handoff", post(handoff))
+        .route("/sessions", get(sessions))
+        .route("/sessions/{id}", delete(revoke_session))
         .route("/auth/signup", post(sign_up))
         .route("/auth/signin", post(sign_in))
         .route("/auth/signout", post(sign_out))
@@ -161,6 +229,29 @@ pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oau
         .layer(Extension(oauth))
         .layer(Extension(mailer))
         .layer(Extension(ResetBase(public_url.trim_end_matches('/').to_string())))
+        .layer(Extension(Arc::new(sites)))
+}
+
+/// Where this page is (account, fin, or everything at one address), where the account and the apps live.
+async fn site(Extension(sites): Extension<Arc<Sites>>, headers: HeaderMap) -> Json<Site> {
+    let host = headers.get(axum::http::header::HOST).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    Json(sites.site(host))
+}
+
+/// Sign this browser in to an app: a one-time code in the address of the app's own callback page.
+async fn handoff(State(s): State<Store>, Extension(sites): Extension<Arc<Sites>>, Auth(c, _): Auth, Json(b): Json<HandoffRequest>) -> R<Handoff> {
+    let code = s.handoff(&c, &b.app).await?;
+    let base = sites.url(&b.app).ok_or(Error::NotFound("app"))?;
+    Ok(Json(Handoff { url: format!("{base}/auth/callback#code={code}") }))
+}
+
+async fn sessions(State(s): State<Store>, Auth(c, _): Auth) -> R<Vec<SessionInfo>> {
+    Ok(Json(s.sessions(&c).await?))
+}
+
+async fn revoke_session(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>) -> R<Value> {
+    s.revoke_session(&c, id).await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 /// Is the database reachable? Whatever watches the server (a proxy, an orchestrator) should ask this.
@@ -602,7 +693,7 @@ mod tests {
     async fn app() -> (Router, Store) {
         let store = Store::test().await.unwrap();
         let dir = std::env::temp_dir();
-        (router(store.clone(), dir, Arc::new(Limits::new(true)), Arc::new(Oauth::none()), Arc::new(Mailer::off()), String::new()), store)
+        (router(store.clone(), dir, Arc::new(Limits::new(true)), Arc::new(Oauth::none()), Arc::new(Mailer::off()), Sites::single("")), store)
     }
 
     async fn call(app: &Router, method: &str, uri: &str, token: Option<&str>, body: Option<Value>, ip: &str) -> (StatusCode, HeaderMap, Vec<u8>) {
@@ -630,6 +721,54 @@ mod tests {
         v["token"].as_str().unwrap().to_string()
     }
 
+    #[test]
+    fn each_address_knows_which_app_it_is() {
+        let s = Sites::new("https://pebblelab.in/", Some("https://fin.pebblelab.in"));
+        assert_eq!(s.here("pebblelab.in"), "account");
+        assert_eq!(s.here("FIN.pebblelab.in"), "fin");
+        assert_eq!(s.here("127.0.0.1:3000"), "all", "an address neither is at gets everything");
+        assert_eq!(Sites::single("http://127.0.0.1:3000").here("127.0.0.1:3000"), "all");
+        let site = s.site("fin.pebblelab.in");
+        assert_eq!(site.account_url, "https://pebblelab.in");
+        assert_eq!(site.url("fin"), Some("https://fin.pebblelab.in"));
+        assert_eq!(site.apps.len(), APPS.len());
+    }
+
+    #[tokio::test]
+    async fn the_account_signs_fin_in_over_rest() {
+        let store = Store::test().await.unwrap();
+        let app = router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::none()), Arc::new(Mailer::off()), Sites::new("https://pebblelab.test", Some("https://fin.pebblelab.test")));
+        let acct = sign_up(&app, "anita").await;
+        let (s, v) = json(&app, "POST", "/api/auth/handoff", Some(&acct), Some(json!({ "app": "fin" }))).await;
+        assert_eq!(s, StatusCode::OK, "{v}");
+        let url = v["url"].as_str().unwrap();
+        let code = url.strip_prefix("https://fin.pebblelab.test/auth/callback#code=").expect(url);
+        let (s, fin) = json(&app, "POST", "/api/auth/redeem", None, Some(json!({ "code": code }))).await;
+        assert_eq!(s, StatusCode::OK);
+        let fin = fin["token"].as_str().unwrap();
+        assert_eq!(json(&app, "GET", "/api/accounts", Some(fin), None).await.0, StatusCode::OK);
+        assert_eq!(json(&app, "GET", "/api/me", Some(fin), None).await.0, StatusCode::OK);
+        assert_eq!(json(&app, "GET", "/api/connectors", Some(fin), None).await.0, StatusCode::FORBIDDEN, "tokens are the account's");
+        assert_eq!(json(&app, "GET", "/api/sessions", Some(fin), None).await.0, StatusCode::FORBIDDEN);
+        let (_, list) = json(&app, "GET", "/api/sessions", Some(&acct), None).await;
+        assert_eq!(list.as_array().unwrap().len(), 2);
+        assert_eq!(json(&app, "POST", "/api/auth/handoff", Some(&acct), Some(json!({ "app": "https://evil.example" }))).await.0, StatusCode::NOT_FOUND, "only known apps, at their own address");
+        // signing out of fin signs this browser out of the account too
+        assert_eq!(json(&app, "POST", "/api/auth/signout", Some(fin), Some(json!({}))).await.0, StatusCode::OK);
+        assert_eq!(json(&app, "GET", "/api/me", Some(&acct), None).await.0, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn the_page_learns_where_it_is() {
+        let store = Store::test().await.unwrap();
+        let app = router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::none()), Arc::new(Mailer::off()), Sites::new("https://pebblelab.test", Some("https://fin.pebblelab.test")));
+        let req = Request::builder().uri("/api/site").header("host", "fin.pebblelab.test").body(Body::empty()).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let v: Value = serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(v["here"], "fin");
+        assert_eq!(v["account_url"], "https://pebblelab.test");
+    }
+
     #[tokio::test]
     async fn reset_answers_the_same_for_any_address_and_the_token_works_once() {
         let (app, store) = app().await;
@@ -655,7 +794,7 @@ mod tests {
     #[tokio::test]
     async fn with_password_login_off_only_providers_get_people_in() {
         let store = Store::test().await.unwrap();
-        let app = router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::none().with_password(false)), Arc::new(Mailer::off()), String::new());
+        let app = router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::none().with_password(false)), Arc::new(Mailer::off()), Sites::single(""));
         let (s, v) = json(&app, "GET", "/api/auth/options", None, None).await;
         assert_eq!((s, v), (StatusCode::OK, json!({ "password": false })));
         for (path, body) in [
@@ -720,7 +859,7 @@ mod tests {
         let a = sign_up(&app, "anita").await;
         let (_, acct) = json(&app, "POST", "/api/accounts", Some(&a), Some(json!({"name": "salary", "kind": "bank"}))).await;
         let id = acct["id"].as_i64().unwrap();
-        let (_, made) = json(&app, "POST", "/api/connectors", Some(&a), Some(json!({"name": "claude", "scopes": ["read"]}))).await;
+        let (_, made) = json(&app, "POST", "/api/connectors", Some(&a), Some(json!({"name": "claude", "scopes": ["fin:read"]}))).await;
         let t = made["token"].as_str().unwrap();
         assert_eq!(json(&app, "GET", "/api/accounts", Some(t), None).await.0, StatusCode::OK);
         assert_eq!(json(&app, "GET", "/api/transactions", Some(t), None).await.0, StatusCode::FORBIDDEN);
@@ -753,7 +892,7 @@ mod tests {
     #[tokio::test]
     async fn closed_sign_ups_are_refused_over_rest() {
         let (_, store) = app().await;
-        let app = router(store.with_config(pebblelab_core::Config { signups_open: false, ..Default::default() }), std::env::temp_dir(), Arc::new(Limits::new(false)), Arc::new(Oauth::none()), Arc::new(Mailer::off()), String::new());
+        let app = router(store.with_config(pebblelab_core::Config { signups_open: false, ..Default::default() }), std::env::temp_dir(), Arc::new(Limits::new(false)), Arc::new(Oauth::none()), Arc::new(Mailer::off()), Sites::single(""));
         let (s, _) = json(&app, "POST", "/api/auth/signup", None, Some(json!({"name": "x", "email": "x@y.example", "password": "correct horse battery"}))).await;
         assert_eq!(s, StatusCode::FORBIDDEN);
     }
@@ -852,7 +991,7 @@ mod tests {
         let mut providers = HashMap::new();
         providers.insert("google", aimed_at(Provider::google("gid".into(), "secret".into()), base));
         providers.insert("github", aimed_at(Provider::github("hid".into(), "secret".into()), base));
-        router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::new("http://pebblelab.test", providers)), Arc::new(Mailer::off()), String::new())
+        router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::new("http://pebblelab.test", providers)), Arc::new(Mailer::off()), Sites::single(""))
     }
 
     /// Start a sign-in the way a browser would, and return its state and cookie.

@@ -25,7 +25,7 @@ const SELECT: &str = "SELECT s.*, a.id AS acc_id, a.name AS acc_name FROM assets
 impl Store {
     /// The things the caller owns outside any account. They are the caller's own: not shared with family.
     pub async fn assets(&self, c: &Caller) -> Result<Vec<Asset>> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         let rows = sqlx::query(sqlx::AssertSqlSafe(format!("{SELECT} WHERE s.user_id = $1 ORDER BY s.value DESC, s.id"))).bind(c.user_id).fetch_all(&self.pool).await?;
         Ok(rows.iter().map(asset_from).collect())
     }
@@ -36,7 +36,7 @@ impl Store {
     }
 
     pub async fn add_asset(&self, c: &Caller, b: NewAsset) -> Result<Asset> {
-        c.need("add")?;
+        c.need(FIN_ADD)?;
         let name = clean(&b.name).to_lowercase();
         if name.is_empty() {
             return Err(Error::bad("name the asset"));
@@ -59,7 +59,7 @@ impl Store {
     }
 
     pub async fn update_asset(&self, c: &Caller, id: i64, b: UpdateAsset) -> Result<Asset> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let cur = self.asset(c, id).await?;
         let name = match &b.name {
             Some(n) if clean(n).is_empty() => return Err(Error::bad("name the asset")),
@@ -84,7 +84,7 @@ impl Store {
     }
 
     pub async fn delete_asset(&self, c: &Caller, id: i64) -> Result<()> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let asset = self.asset(c, id).await?;
         let mut db = self.pool.begin().await?;
         // an investment that took its value from this asset keeps that value, so its balance does not jump

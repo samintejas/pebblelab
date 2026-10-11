@@ -11,10 +11,10 @@ const NOTE: &str = "Amounts are decimal numbers or strings in major units (e.g. 
 /// The scope a tool needs.
 fn scope_of(tool: &str) -> &'static str {
     match tool {
-        "list_accounts" | "list_subscriptions" | "list_assets" | "get_insights" | "ask_pebblelab" => "read",
-        "list_transactions" | "list_tags" => "transactions",
-        "add_transaction" | "transfer_money" | "add_subscription" | "add_asset" => "add",
-        _ => "edit",
+        "list_accounts" | "list_subscriptions" | "list_assets" | "get_insights" | "ask_pebblelab" => FIN_READ,
+        "list_transactions" | "list_tags" => FIN_TRANSACTIONS,
+        "add_transaction" | "transfer_money" | "add_subscription" | "add_asset" => FIN_ADD,
+        _ => FIN_EDIT,
     }
 }
 

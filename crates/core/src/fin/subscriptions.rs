@@ -45,7 +45,7 @@ fn next_date(s: Option<&str>) -> Result<Option<String>> {
 
 impl Store {
     pub async fn subscriptions(&self, c: &Caller) -> Result<Vec<Subscription>> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         let rows = sqlx::query(
             "SELECT * FROM subscriptions WHERE user_id = $1 \
              ORDER BY active DESC, (next_on IS NULL OR next_on = ''), next_on, id",
@@ -62,7 +62,7 @@ impl Store {
     }
 
     pub async fn add_subscription(&self, c: &Caller, b: NewSubscription) -> Result<Subscription> {
-        c.need("add")?;
+        c.need(FIN_ADD)?;
         let name = clean(&b.name).to_lowercase();
         if name.is_empty() {
             return Err(Error::bad("name the subscription"));
@@ -91,7 +91,7 @@ impl Store {
     }
 
     pub async fn update_subscription(&self, c: &Caller, id: i64, b: UpdateSubscription) -> Result<Subscription> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let cur = self.subscription(c, id).await?;
         let name = match &b.name {
             Some(n) if clean(n).is_empty() => return Err(Error::bad("name the subscription")),
@@ -130,7 +130,7 @@ impl Store {
     }
 
     pub async fn delete_subscription(&self, c: &Caller, id: i64) -> Result<()> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         self.subscription(c, id).await?;
         sqlx::query("DELETE FROM subscriptions WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())

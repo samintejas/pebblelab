@@ -44,10 +44,14 @@ pub enum Cmd {
         /// The server sits behind a reverse proxy that sets X-Forwarded-For: take the client address from it.
         #[arg(long, env = "PEBBLELAB_TRUST_PROXY")]
         trust_proxy: bool,
-        /// The address people reach this server at, e.g. https://pebblelab.example.com. Google and GitHub send
-        /// them back to `<it>/api/auth/<provider>/callback`.
+        /// Where the pebblelab account lives, e.g. https://pebblelab.in: sign-in, profile, family and tokens.
+        /// Google and GitHub send people back to `<it>/api/auth/<provider>/callback`, and reset links point here.
         #[arg(long, env = "PEBBLELAB_PUBLIC_URL", default_value = "http://127.0.0.1:3000")]
         public_url: String,
+        /// Where fin lives, e.g. https://fin.pebblelab.in. Unset: the same address as the account, which then
+        /// serves everything.
+        #[arg(long, env = "PEBBLELAB_FIN_URL")]
+        fin_url: Option<String>,
         /// Sign in with Google: the OAuth client id and secret from the Google Cloud console.
         #[arg(long, env = "PEBBLELAB_GOOGLE_CLIENT_ID")]
         google_client_id: Option<String>,
@@ -66,7 +70,7 @@ pub enum Cmd {
         #[arg(long, env = "PEBBLELAB_RESEND_API_KEY", hide_env_values = true)]
         resend_api_key: Option<String>,
         /// Who email comes from. Resend only lets you use an address on a domain you have verified there.
-        #[arg(long, env = "PEBBLELAB_MAIL_FROM", default_value = "pebblelab/fin <onboarding@resend.dev>")]
+        #[arg(long, env = "PEBBLELAB_MAIL_FROM", default_value = "pebblelab <onboarding@resend.dev>")]
         mail_from: String,
         /// Seconds between background runs (renewals, reminders, tidying). 0 turns them off.
         #[arg(long, env = "PEBBLELAB_JOB_SECS", default_value_t = 900)]
@@ -135,7 +139,7 @@ pub enum TokenCmd {
     Create {
         name: String,
         /// read, transactions, add, edit
-        #[arg(long, value_delimiter = ',', default_value = "read,transactions")]
+        #[arg(long, value_delimiter = ',', default_value = "fin:read,fin:transactions")]
         scopes: Vec<String>,
     },
     List,

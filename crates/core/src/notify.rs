@@ -71,7 +71,7 @@ impl Store {
     }
 
     pub async fn notifications(&self, c: &Caller) -> Result<Vec<Notification>> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         let rows = sqlx::query("SELECT id, title, body, link, read, created_at FROM notifications WHERE user_id = $1 ORDER BY id DESC LIMIT 30")
             .bind(c.user_id)
             .fetch_all(&self.pool)
@@ -84,7 +84,7 @@ impl Store {
 
     /// Mark one notification read, or all of them when `id` is `None`.
     pub async fn mark_notifications_read(&self, c: &Caller, id: Option<i64>) -> Result<()> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         sqlx::query("UPDATE notifications SET read = 1 WHERE user_id = $1 AND ($2 IS NULL OR id = $3)")
             .bind(c.user_id)
             .bind(id)

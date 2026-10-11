@@ -724,20 +724,19 @@ pub struct Notification {
     pub id: i64,
     pub title: String,
     pub body: String,
-    /// Where it leads in the app: `transactions`, `accounts/3`, `insights`, `settings/family`, or empty.
+    /// Where it leads: a path in fin (`transactions`, `accounts/3`, `insights`), one in the account when it
+    /// starts `account/` (`account/family`), or empty.
     pub link: String,
     pub created_at: String,
     pub read: bool,
 }
 
-pub const SCOPES: [&str; 4] = ["read", "transactions", "add", "edit"];
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Connector {
     pub id: i64,
     pub name: String,
-    /// What the token may do: `read` accounts and insights, read `transactions`, `add` them, `edit` or
-    /// delete them.
+    /// What the token may do, app by app: `fin:read` accounts and insights, `fin:transactions` to read
+    /// them, `fin:add`, and `fin:edit` to change or delete.
     pub scopes: Vec<String>,
     /// Last four characters of the token, to tell tokens apart.
     pub tail: String,

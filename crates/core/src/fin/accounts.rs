@@ -202,12 +202,12 @@ impl Store {
     }
 
     pub async fn accounts(&self, c: &Caller, include_archived: bool) -> Result<Vec<Account>> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         self.load_accounts(c.user_id, None, include_archived).await
     }
 
     pub async fn account(&self, c: &Caller, id: i64) -> Result<Account> {
-        c.need("read")?;
+        c.need(FIN_READ)?;
         self.load_accounts(c.user_id, Some(id), true).await?.into_iter().next().ok_or(Error::NotFound("account"))
     }
 
@@ -251,7 +251,7 @@ impl Store {
     }
 
     pub async fn create_account(&self, c: &Caller, b: NewAccount) -> Result<Account> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let name = clean(&b.name).to_lowercase();
         if name.is_empty() {
             return Err(Error::bad("name the account"));
@@ -333,7 +333,7 @@ impl Store {
     /// out. Only an account with a single owner can be deleted: on a joint one, the others leave first.
     /// Cannot be undone.
     pub async fn delete_account(&self, c: &Caller, id: i64) -> Result<()> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let mut db = self.pool.begin().await?;
         self.lock_account(&mut db, id).await?;
         let a = self.owned_account(c, id).await?;
@@ -347,7 +347,7 @@ impl Store {
 
     /// Take the caller off an account they co-own. The others keep it, with its history.
     pub async fn leave_account(&self, c: &Caller, id: i64) -> Result<()> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let mut db = self.pool.begin().await?;
         self.lock_account(&mut db, id).await?;
         let a = self.owned_account(c, id).await?;
@@ -379,7 +379,7 @@ impl Store {
     }
 
     pub async fn update_account(&self, c: &Caller, id: i64, b: UpdateAccount) -> Result<Account> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let mut db = self.pool.begin().await?;
         self.lock_account(&mut db, id).await?;
         let a = self.owned_account(c, id).await?;

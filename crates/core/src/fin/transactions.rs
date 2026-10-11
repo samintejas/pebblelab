@@ -104,7 +104,7 @@ impl Store {
     }
 
     pub async fn transactions(&self, c: &Caller, f: TxFilter) -> Result<TxPage> {
-        c.need("transactions")?;
+        c.need(FIN_TRANSACTIONS)?;
         let mut count = QueryBuilder::<Postgres>::new("SELECT COUNT(*)");
         Self::push_filter(&mut count, c.user_id, &f);
         let total: i64 = count.build().fetch_one(&self.pool).await?.get(0);
@@ -190,7 +190,7 @@ impl Store {
     }
 
     pub async fn transaction(&self, c: &Caller, id: i64) -> Result<Transaction> {
-        c.need("transactions")?;
+        c.need(FIN_TRANSACTIONS)?;
         self.tx_for(c.user_id, id).await
     }
 
@@ -217,7 +217,7 @@ impl Store {
     }
 
     pub async fn add_transaction(&self, c: &Caller, b: NewTransaction) -> Result<Transaction> {
-        c.need("add")?;
+        c.need(FIN_ADD)?;
         let amount = magnitude(b.amount)?;
         let account = self.owned_account(c, b.account_id).await?;
         let signed = match b.kind {
@@ -280,7 +280,7 @@ impl Store {
     }
 
     pub async fn transfer(&self, c: &Caller, b: NewTransfer) -> Result<Vec<Transaction>> {
-        c.need("add")?;
+        c.need(FIN_ADD)?;
         let amount = magnitude(b.amount)?;
         if b.from_account_id == b.to_account_id {
             return Err(Error::bad("choose two different accounts"));
@@ -355,7 +355,7 @@ impl Store {
     }
 
     pub async fn update_transaction(&self, c: &Caller, id: i64, b: UpdateTransaction) -> Result<Transaction> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let tx = self.tx_for(c.user_id, id).await?;
         let mut db = self.pool.begin().await?;
         let legs = self.legs(&mut db, id, tx.transfer_id).await?;
@@ -411,7 +411,7 @@ impl Store {
 
     /// Delete a transaction (both legs of a transfer). Returns how many rows went.
     pub async fn delete_transaction(&self, c: &Caller, id: i64) -> Result<u64> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let tx = self.tx_for(c.user_id, id).await?;
         let mut db = self.pool.begin().await?;
         let legs = self.legs(&mut db, id, tx.transfer_id).await?;
@@ -424,7 +424,7 @@ impl Store {
 
     /// Parties (merchants and payers) you have used, with how often, most used first. For the filter and suggestions.
     pub async fn parties(&self, c: &Caller) -> Result<Vec<(String, i64)>> {
-        c.need("transactions")?;
+        c.need(FIN_TRANSACTIONS)?;
         let sql = format!(
             "SELECT lower(t.party) AS p, COUNT(*) AS n FROM transactions t JOIN accounts a ON a.id = t.account_id \
              WHERE {} AND t.party <> '' GROUP BY p ORDER BY n DESC, p",
@@ -436,7 +436,7 @@ impl Store {
 
     /// Tags you have used, with how often, most used first. For suggestions.
     pub async fn tags(&self, c: &Caller) -> Result<Vec<(String, i64)>> {
-        c.need("transactions")?;
+        c.need(FIN_TRANSACTIONS)?;
         let sql = format!(
             "SELECT g.tag, COUNT(*) AS n FROM tx_tags g JOIN transactions t ON t.id = g.tx_id JOIN accounts a ON a.id = t.account_id \
              WHERE {} GROUP BY g.tag ORDER BY n DESC, g.tag",
@@ -448,8 +448,8 @@ impl Store {
 
     /// Everything the caller can see, as one csv: accounts first, then transactions, newest first.
     pub async fn export_csv(&self, c: &Caller) -> Result<String> {
-        c.need("read")?;
-        c.need("transactions")?;
+        c.need(FIN_READ)?;
+        c.need(FIN_TRANSACTIONS)?;
         let cell = csv_cell;
         let accounts = self.accounts(c, true).await?;
         let mut out = String::from("accounts\nname,kind,owners,who sees it,balance\n");
@@ -481,7 +481,7 @@ impl Store {
     // ---- attachments ---------------------------------------------------------------------------------
 
     pub async fn add_attachment(&self, c: &Caller, tx_id: i64, name: &str, mime: &str, data: Vec<u8>) -> Result<Attachment> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         if data.is_empty() {
             return Err(Error::bad("the file is empty"));
         }
@@ -511,14 +511,14 @@ impl Store {
 
     /// `(name, mime, bytes)` of an attachment on a transaction the caller can see.
     pub async fn attachment(&self, c: &Caller, id: i64) -> Result<(String, String, Vec<u8>)> {
-        c.need("transactions")?;
+        c.need(FIN_TRANSACTIONS)?;
         let r = sqlx::query("SELECT tx_id, name, mime, data FROM attachments WHERE id = $1").bind(id).fetch_optional(&self.pool).await?.ok_or(Error::NotFound("attachment"))?;
         self.tx_for(c.user_id, r.get("tx_id")).await?;
         Ok((r.get("name"), safe_mime(&r.get::<String, _>("mime")), r.get("data")))
     }
 
     pub async fn delete_attachment(&self, c: &Caller, id: i64) -> Result<()> {
-        c.need("edit")?;
+        c.need(FIN_EDIT)?;
         let tx_id: i64 = sqlx::query("SELECT tx_id FROM attachments WHERE id = $1").bind(id).fetch_optional(&self.pool).await?.ok_or(Error::NotFound("attachment"))?.get(0);
         let tx = self.tx_for(c.user_id, tx_id).await?;
         self.owned_account(c, tx.account_id).await?;
