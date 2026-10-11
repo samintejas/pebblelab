@@ -555,11 +555,11 @@ fn QuickAdd(quick: Quick) -> impl IntoView {
             <InputSeg caption="date" flex="0 1 170px">
                 <input class=seg_input type="date" max=fmt::today() prop:value=move || date.get() on:change=move |e| date.set(event_target_value(&e))/>
             </InputSeg>
-            <InputSeg caption="description" flex="3 1 220px">
+            <InputSeg caption="description" flex="3 1 160px">
                 <input class=seg_input type="text" node_ref=desc_ref placeholder=placeholder
                     prop:value=move || desc.get() on:input=move |e| desc.set(event_target_value(&e)) on:change=move |_| suggest()/>
             </InputSeg>
-            <InputSeg caption="tags" flex="3 1 240px" composite=true for_id="qa-tags">
+            <InputSeg caption="tags" flex="3 1 160px" composite=true for_id="qa-tags">
                 <TagInput value=tags suggestions=app.tags bare=true id="qa-tags" placeholder="tags"/>
             </InputSeg>
             <InputSeg caption=Signal::derive(move || if transfer.get() { "from account".to_string() } else { "account".to_string() }) flex="1 1 170px">
