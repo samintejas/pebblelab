@@ -389,6 +389,9 @@ pub struct Attachment {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transaction {
     pub id: i64,
+    /// Public id (uuid): unambiguous to share, and searchable.
+    #[serde(default)]
+    pub uid: String,
     pub account_id: i64,
     pub kind: TxKind,
     /// Signed from the account's side: money out is negative.

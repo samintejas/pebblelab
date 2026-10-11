@@ -598,6 +598,8 @@ fn read_files(e: web_sys::Event) -> Vec<web_sys::File> {
 pub fn TxPanel(t: Transaction) -> impl IntoView {
     let app = expect_context::<AppState>();
     let id = t.id;
+    let uid = t.uid.clone();
+    let uid2 = uid.clone();
     let is_transfer = t.kind == TxKind::Transfer;
     let kind = RwSignal::new(match t.kind {
         TxKind::Debit => "expense",
@@ -700,7 +702,7 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
             <div class="d-rightbar__body" tabindex="0" role="group" aria-label="transaction details" style="display:flex;flex-direction:column;gap:12px;padding:16px;font-size:inherit;overscroll-behavior:contain">
                 <div class="d-row" style="justify-content:space-between;flex-wrap:nowrap;align-items:center">
                     <span class="d-label">"transaction id"</span>
-                    <button type="button" class="d-btn d-btn--ghost d-btn--sm" title="copy transaction id" aria-label=format!("copy transaction id {id}") on:click=move |_| crate::pages::settings::copy(app, id.to_string())><span style="font-family:monospace">{format!("#{id}")}</span><Ico d=COPY/></button>
+                    <button type="button" class="d-btn d-btn--ghost d-btn--sm" title="copy transaction id" aria-label="copy transaction id" on:click=move |_| crate::pages::settings::copy(app, uid2.clone())><span style="font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis">{uid.clone()}</span><Ico d=COPY/></button>
                 </div>
                 <div class="seg" role="group" aria-label="kind of transaction">{seg("expense")}{seg("income")}{seg("transfer")}</div>
                 <div class="d-field">

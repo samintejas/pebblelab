@@ -94,7 +94,8 @@ impl Store {
         }
         if let Some(q) = f.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             let like = format!("%{}%", q.to_lowercase().replace('%', "\\%").replace('_', "\\_"));
-            qb.push(" AND (lower(t.description) LIKE ").push_bind(like.clone());
+            qb.push(" AND (t.uid::text LIKE ").push_bind(like.clone());
+            qb.push(" ESCAPE '\\' OR lower(t.description) LIKE ").push_bind(like.clone());
             qb.push(" ESCAPE '\\' OR lower(t.party) LIKE ").push_bind(like.clone());
             qb.push(" ESCAPE '\\' OR lower(t.note) LIKE ").push_bind(like.clone());
             qb.push(" ESCAPE '\\' OR EXISTS (SELECT 1 FROM tx_tags g WHERE g.tx_id = t.id AND g.tag LIKE ").push_bind(like);
@@ -115,7 +116,7 @@ impl Store {
         let (total_in, total_out): (i64, i64) = (sums.get(0), sums.get(1));
 
         let mut qb = QueryBuilder::<Postgres>::new(
-            "SELECT t.id, t.account_id, t.kind, t.amount, t.date, t.description, t.party, t.note, t.transfer_id, t.created_by, \
+            "SELECT t.id, t.uid::text AS uid, t.account_id, t.kind, t.amount, t.date, t.description, t.party, t.note, t.transfer_id, t.created_by, \
              (SELECT t2.account_id FROM transactions t2 WHERE t.transfer_id IS NOT NULL AND t2.transfer_id = t.transfer_id AND t2.id <> t.id LIMIT 1) AS counterpart_id, \
              (SELECT name FROM users u WHERE u.id = t.created_by) AS by_name, \
              (SELECT initials FROM users u WHERE u.id = t.created_by) AS by_initials",
@@ -170,6 +171,7 @@ impl Store {
                 let id: i64 = r.get("id");
                 Transaction {
                     id,
+                    uid: r.get("uid"),
                     account_id: r.get("account_id"),
                     kind: TxKind::parse(&r.get::<String, _>("kind")).unwrap_or(TxKind::Debit),
                     amount: r.get("amount"),
@@ -195,7 +197,7 @@ impl Store {
     /// A transaction the person can see, whatever scope the caller holds: writes return what they made.
     pub(crate) async fn tx_for(&self, user_id: i64, id: i64) -> Result<Transaction> {
         let mut qb = QueryBuilder::<Postgres>::new(
-            "SELECT t.id, t.account_id, t.kind, t.amount, t.date, t.description, t.party, t.note, t.transfer_id, t.created_by, \
+            "SELECT t.id, t.uid::text AS uid, t.account_id, t.kind, t.amount, t.date, t.description, t.party, t.note, t.transfer_id, t.created_by, \
              (SELECT t2.account_id FROM transactions t2 WHERE t.transfer_id IS NOT NULL AND t2.transfer_id = t.transfer_id AND t2.id <> t.id LIMIT 1) AS counterpart_id, \
              (SELECT name FROM users u WHERE u.id = t.created_by) AS by_name, \
              (SELECT initials FROM users u WHERE u.id = t.created_by) AS by_initials \
