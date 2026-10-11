@@ -39,6 +39,34 @@ fn other(prompt: &'static str, href: &'static str, label: &'static str) -> AnyVi
     .into_any()
 }
 
+/// With the account hub in use, signing in, signing up and resetting all happen at pebblelab.in: go there.
+/// Returns true when the page is leaving, so there is nothing to draw.
+fn to_hub() -> bool {
+    match api::hub_sign_in() {
+        Some(url) => {
+            if let Some(w) = web_sys::window() {
+                let _ = w.location().set_href(&url);
+            }
+            true
+        }
+        None => false,
+    }
+}
+
+#[component]
+fn Leaving() -> impl IntoView {
+    view! {
+        <main id="main" tabindex="-1" class="d-status-page" data-kind="loading">
+            <div class="d-street" aria-hidden="true"><div class="d-street__world"><i></i><i></i><i></i></div></div>
+            <div class="d-status-page__inner">
+                <Pebbles label="taking you to pebblelab" large=true/>
+                <h1 class="d-status-page__title">"taking you to pebblelab"</h1>
+            </div>
+            <div class="d-status-page__foot">"pebblelab/fin"</div>
+        </main>
+    }
+}
+
 /// "or continue with google / github", for the providers this server has set up. Nothing shows when none are.
 #[component]
 fn Providers(verb: &'static str, #[prop(optional)] alone: bool) -> impl IntoView {
@@ -71,7 +99,7 @@ pub fn AuthCallback() -> impl IntoView {
         let Some(code) = api::hash_params().remove("code") else {
             return err.set(Some("there is no sign-in to finish: start again".into()));
         };
-        match api::post::<Session>("/auth/redeem", &serde_json::json!({ "code": code })).await {
+        match api::post::<Session>("/auth/redeem", &serde_json::json!({ "code": code, "app": "fin" })).await {
             Ok(s) => {
                 api::save_token(&s.token, true);
                 nav("/transactions", Default::default());
@@ -92,7 +120,7 @@ pub fn AuthCallback() -> impl IntoView {
 }
 
 #[component]
-pub fn SignIn() -> impl IntoView {
+fn SignInPage() -> impl IntoView {
     let (email, pass, keep) = (RwSignal::new(String::new()), RwSignal::new(String::new()), RwSignal::new(true));
     // a provider sign-in that failed lands here with the reason after the `#`
     let (busy, err) = (RwSignal::new(false), RwSignal::new(api::hash_params().remove("error")));
@@ -142,7 +170,7 @@ pub fn SignIn() -> impl IntoView {
 }
 
 #[component]
-pub fn SignUp() -> impl IntoView {
+fn SignUpPage() -> impl IntoView {
     let (name, email, pass) = (RwSignal::new(String::new()), RwSignal::new(String::new()), RwSignal::new(String::new()));
     let (busy, err) = (RwSignal::new(false), RwSignal::new(None::<String>));
     let pw = LocalResource::new(api::password_login);
@@ -185,7 +213,7 @@ pub fn SignUp() -> impl IntoView {
 }
 
 #[component]
-pub fn Reset() -> impl IntoView {
+fn ResetPage() -> impl IntoView {
     let token = api::hash_params().remove("token");
     let only_sign_in = view! { <ButtonLink href="/signin" variant=ButtonVariant::Secondary size=Size::Sm>"sign in"</ButtonLink> }.into_any();
     let (email, pass) = (RwSignal::new(String::new()), RwSignal::new(String::new()));
@@ -241,4 +269,19 @@ pub fn Reset() -> impl IntoView {
             }}
         </AuthPage>
     }
+}
+
+#[component]
+pub fn SignIn() -> impl IntoView {
+    if to_hub() { view! { <Leaving/> }.into_any() } else { view! { <SignInPage/> }.into_any() }
+}
+
+#[component]
+pub fn SignUp() -> impl IntoView {
+    if to_hub() { view! { <Leaving/> }.into_any() } else { view! { <SignUpPage/> }.into_any() }
+}
+
+#[component]
+pub fn Reset() -> impl IntoView {
+    if to_hub() { view! { <Leaving/> }.into_any() } else { view! { <ResetPage/> }.into_any() }
 }

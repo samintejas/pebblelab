@@ -37,7 +37,7 @@ async fn real_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let tz: chrono_tz::Tz = cli.tz.parse().map_err(|_| format!("unknown time zone '{}', use a name like Asia/Kolkata or UTC", cli.tz))?;
     let store = Store::open_pool(&cli.db, cli.db_pool).await?.with_config(Config { tz, signups_open: cli.signups == "open" });
     match cli.cmd {
-        Cmd::Serve { listen, ui_dir, trust_proxy, public_url, google_client_id, google_client_secret, github_client_id, github_client_secret, resend_api_key, mail_from, no_password_login, job_secs } => {
+        Cmd::Serve { listen, ui_dir, trust_proxy, public_url, google_client_id, google_client_secret, github_client_id, github_client_secret, hub_url, fin_url, resend_api_key, mail_from, no_password_login, job_secs } => {
             let listener = tokio::net::TcpListener::bind(&listen).await?;
             tracing::info!("listening on http://{listen}  (rest /api, mcp /mcp, ui {ui_dir}; time zone {tz}, sign-ups {})", cli.signups);
             if job_secs > 0 {
@@ -54,7 +54,7 @@ async fn real_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             if let (Some(id), Some(secret)) = (github_client_id, github_client_secret) {
                 providers.insert("github", oauth::Provider::github(id, secret));
             }
-            let oauth = oauth::Oauth::new(&public_url, providers).with_password(!no_password_login);
+            let oauth = oauth::Oauth::new(&public_url, providers).with_password(!no_password_login).with_apps(set(hub_url), set(fin_url));
             if no_password_login && oauth.enabled().is_empty() {
                 return Err("PEBBLELAB_NO_PASSWORD_LOGIN is on but no Google or GitHub sign-in is set up: nobody could sign in".into());
             }

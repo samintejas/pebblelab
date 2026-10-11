@@ -1,5 +1,6 @@
 mod api;
 mod fmt;
+mod hub_art;
 mod icons;
 mod pages;
 mod state;
@@ -11,7 +12,15 @@ use leptos_router::path;
 
 fn main() {
     console_error_panic_hook::set_once();
-    leptos::mount::mount_to_body(App);
+    // what the server says about signing in decides which screens show, so ask before drawing any
+    wasm_bindgen_futures::spawn_local(async {
+        api::load_options().await;
+        if api::is_hub() {
+            leptos::mount::mount_to_body(pages::hub::HubApp);
+        } else {
+            leptos::mount::mount_to_body(App);
+        }
+    });
 }
 
 #[component]

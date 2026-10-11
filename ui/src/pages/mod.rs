@@ -1,6 +1,7 @@
 mod accounts;
 mod assets;
 mod auth;
+pub mod hub;
 mod insights;
 mod landing;
 mod settings;

@@ -1,0 +1,5 @@
+# pebblelab.in is the account hub: the same server as fin, told apart by the address the page is opened at
+pebblelab.in, www.pebblelab.in {
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy 127.0.0.1:3000
+}

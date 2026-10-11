@@ -46,3 +46,20 @@
 @keyframes lp-glow { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
 @keyframes lp-orbs { to { background-position: 75% -10%, 70% 130%; } }
 @media (prefers-reduced-motion: reduce) { .lp-hero, .lp-hero::before, .lp-hero::after { animation: none; } }
+
+/* pebblelab.in (the account hub): its landing, apps list and sign-in buttons */
+.pl-page { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg-base); }
+.pl-hero { position: relative; isolation: isolate; overflow: hidden; }
+.pl-hero::after { content: ""; position: absolute; z-index: -1; right: 40px; top: 0; width: 480px; height: 480px; border-radius: 50%; border: 1px solid var(--accent-primary-border); opacity: 0; animation: pl-tide 3.6s var(--ease-out) infinite; }
+@keyframes pl-tide { 0% { opacity: 0; transform: scale(.2); } 20% { opacity: .6; } 100% { opacity: 0; transform: scale(1); } }
+.pl-app { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); text-decoration: none; color: inherit; }
+.pl-app:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.pl-app[aria-disabled="true"] { border-style: dashed; background: none; color: var(--text-secondary); }
+.pl-mark { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-soft); border-radius: var(--radius-md); background: var(--bg-base); }
+.pl-mark svg { width: 20px; height: 20px; }
+.pl-provider { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 44px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--bg-control); color: var(--text-strong); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
+.pl-provider:hover { background: var(--bg-hover); border-color: var(--border-focus-ring-quiet); }
+.pl-provider b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-fill); font-size: var(--font-size-xs); font-weight: 600; color: var(--text-max); }
+.pl-panel { display: flex; flex-direction: column; gap: 16px; max-width: 980px; }
+.pl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; align-items: start; }
+@media (prefers-reduced-motion: reduce) { .pl-hero::after { animation: none; opacity: .3; } }

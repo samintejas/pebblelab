@@ -67,6 +67,8 @@ pub struct Oauth {
     providers: HashMap<&'static str, Provider>,
     http: reqwest::Client,
     password: bool,
+    hub: Option<String>,
+    fin: Option<String>,
 }
 
 fn failed(provider: &str, what: &str) -> Error {
@@ -77,13 +79,29 @@ fn failed(provider: &str, what: &str) -> Error {
 impl Oauth {
     pub fn new(public_url: &str, providers: HashMap<&'static str, Provider>) -> Self {
         let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("pebblelab-fin").build().expect("an http client");
-        Oauth { public_url: public_url.trim_end_matches('/').to_string(), providers, http, password: true }
+        Oauth { public_url: public_url.trim_end_matches('/').to_string(), providers, http, password: true, hub: None, fin: None }
     }
 
     /// Whether people may also sign up and in with an email and a password (on unless turned off).
     pub fn with_password(mut self, on: bool) -> Self {
         self.password = on;
         self
+    }
+
+    /// The account hub's and fin's addresses, when the hub is in use.
+    pub fn with_apps(mut self, hub: Option<String>, fin: Option<String>) -> Self {
+        let clean = |u: Option<String>| u.map(|u| u.trim_end_matches('/').to_string());
+        self.hub = clean(hub);
+        self.fin = clean(fin);
+        self
+    }
+
+    pub fn hub(&self) -> Option<&str> {
+        self.hub.as_deref()
+    }
+
+    pub fn fin(&self) -> Option<&str> {
+        self.fin.as_deref()
     }
 
     pub fn password(&self) -> bool {

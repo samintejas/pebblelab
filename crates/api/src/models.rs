@@ -763,3 +763,30 @@ pub struct CreatedConnector {
     pub token: String,
     pub connector: Connector,
 }
+
+/// A way to sign in that an account has: a provider and the address it vouched for.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SignInMethod {
+    pub provider: String,
+    pub email: String,
+    pub created_at: String,
+}
+
+/// One place someone is signed in: a browser, which app opened it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub id: i64,
+    /// `fin`, `account`, or empty for a session from before this was kept.
+    pub app: String,
+    pub created_at: String,
+    pub last_used_at: Option<String>,
+    /// The one this request came with.
+    pub current: bool,
+}
+
+/// How someone signs in, and where they are signed in now.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Security {
+    pub methods: Vec<SignInMethod>,
+    pub sessions: Vec<SessionInfo>,
+}

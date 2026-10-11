@@ -104,6 +104,11 @@ pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oau
         .route("/auth/providers", get(providers))
         .route("/auth/options", get(options))
         .route("/auth/redeem", post(redeem))
+        .route("/auth/handoff", post(handoff))
+        .route("/me/security", get(security))
+        .route("/sessions/{id}", delete(end_session))
+        .route("/me/identities/{provider}", delete(unlink_identity))
+        .route("/me/identities/{provider}/link", post(link_identity))
         .route("/auth/{provider}/start", get(oauth_start))
         .route("/auth/{provider}/callback", get(oauth_callback))
         .route("/me", get(me).patch(update_me).delete(delete_me))
@@ -210,7 +215,7 @@ async fn sign_out(State(s): State<Store>, Auth(_, token): Auth) -> R<Value> {
 /// The providers people can sign in with here, so the app knows which buttons to show.
 /// What the sign-in screens should offer besides the providers.
 async fn options(Extension(o): Extension<Arc<Oauth>>) -> Json<Value> {
-    Json(json!({ "password": o.password() }))
+    Json(json!({ "password": o.password(), "hub": o.hub(), "fin": o.fin() }))
 }
 
 /// Refuse the email-and-password routes when the server only signs people in through a provider.
@@ -267,7 +272,7 @@ async fn oauth_callback(
     Path(provider): Path<String>,
     Query(q): Query<Back>,
 ) -> Response {
-    let outcome: Result<String, Error> = async {
+    let outcome: Result<Outcome, Error> = async {
         l.sign_in_ip.hit(&ip)?;
         if q.error.is_some() {
             return Err(Error::bad(format!("sign-in with {provider} was cancelled")));
@@ -285,27 +290,79 @@ async fn oauth_callback(
         if theirs.as_deref() != Some(state) {
             return Err(Error::bad("this sign-in did not start in this browser: start again"));
         }
+        let link = s.oauth_link_user(state).await?;
         let verifier = s.oauth_finish(&provider, state).await?;
         let who = o.identity(&provider, code, &verifier).await?;
-        s.external_sign_in(who).await
+        match link {
+            Some(user) => s.link_identity(user, who).await.map(|()| Outcome::Linked),
+            None => s.external_sign_in(who).await.map(Outcome::Code),
+        }
     }
     .await;
     let clear = Some(flow_cookie(&o, "", 0));
     match outcome {
-        Ok(code) => go(&format!("/auth/callback#code={code}"), clear),
+        Ok(Outcome::Code(code)) => go(&format!("/auth/callback#code={code}"), clear),
+        Ok(Outcome::Linked) => go(&format!("/security#linked={provider}"), clear),
+        // adding a way to sign in fails back on the page that asked; a sign-in fails back on the sign-in page
+        Err(e) if q.state.as_deref().is_some() && is_link_error(&e) => go(&format!("/security#{}", serde_urlencoded::to_string([("error", e.message())]).unwrap_or_default()), clear),
         Err(e) => go(&format!("/signin#{}", serde_urlencoded::to_string([("error", e.message())]).unwrap_or_default()), clear),
     }
+}
+
+enum Outcome {
+    Code(String),
+    Linked,
+}
+
+/// A failure that can only come from adding a way to sign in (the provider account is taken, or already added).
+fn is_link_error(e: &Error) -> bool {
+    matches!(e, Error::Conflict(_))
 }
 
 #[derive(Deserialize)]
 struct Redeem {
     code: String,
+    /// Which app is asking: `fin` or `account`.
+    #[serde(default)]
+    app: String,
 }
 
 /// Swap the code from a provider sign-in for a session.
 async fn redeem(State(s): State<Store>, Extension(l): Extension<Arc<Limits>>, ClientIp(ip): ClientIp, Json(b): Json<Redeem>) -> R<Session> {
     l.sign_in_ip.hit(&ip)?;
-    Ok(Json(s.redeem_login_code(&b.code).await?))
+    Ok(Json(s.redeem_login_code_for(&b.code, &b.app).await?))
+}
+
+/// A one-time code for the signed-in person that an app swaps for its own session.
+async fn handoff(State(s): State<Store>, Auth(c, _): Auth) -> R<Value> {
+    Ok(Json(json!({ "code": s.handoff(&c).await? })))
+}
+
+async fn security(State(s): State<Store>, Auth(c, token): Auth) -> R<Security> {
+    Ok(Json(s.security(&c, &token).await?))
+}
+
+async fn end_session(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>) -> R<Value> {
+    s.end_session(&c, id).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn unlink_identity(State(s): State<Store>, Auth(c, _): Auth, Path(provider): Path<String>) -> R<Value> {
+    s.unlink_identity(&c, &provider).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Where to send the browser to add a provider to this account (it signs back in to the same account).
+async fn link_identity(State(s): State<Store>, Extension(o): Extension<Arc<Oauth>>, Extension(l): Extension<Arc<Limits>>, ClientIp(ip): ClientIp, Auth(c, _): Auth, Path(provider): Path<String>) -> Result<Response, ApiError> {
+    l.sign_in_ip.hit(&ip)?;
+    if !o.enabled().contains(&provider.as_str()) {
+        return Err(Error::NotFound("provider").into());
+    }
+    let (state, verifier) = s.oauth_start_link(&c, &provider).await?;
+    let url = o.authorize_url(&provider, &state, &verifier)?;
+    let mut r = Json(json!({ "url": url })).into_response();
+    r.headers_mut().append(SET_COOKIE, HeaderValue::from_str(&flow_cookie(&o, &state, 600)).map_err(|e| Error::Internal(e.to_string()))?);
+    Ok(r)
 }
 
 #[derive(Deserialize)]
@@ -400,12 +457,19 @@ async fn sign_out_all(State(s): State<Store>, Auth(c, _): Auth) -> R<Value> {
 }
 
 #[derive(Deserialize)]
-struct Password {
-    password: String,
+struct DeleteMe {
+    /// The password, for an account that has one.
+    password: Option<String>,
+    /// The account's email, typed to confirm, for people who sign in through a provider.
+    email: Option<String>,
 }
 
-async fn delete_me(State(s): State<Store>, Auth(c, _): Auth, Json(b): Json<Password>) -> R<Value> {
-    s.delete_user(&c, &b.password).await?;
+async fn delete_me(State(s): State<Store>, Auth(c, _): Auth, Json(b): Json<DeleteMe>) -> R<Value> {
+    match (b.email, b.password) {
+        (Some(email), _) => s.delete_user_confirmed(&c, &email).await?,
+        (None, Some(password)) => s.delete_user(&c, &password).await?,
+        (None, None) => return Err(Error::bad("say which account: type your email address").into()),
+    }
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -657,7 +721,7 @@ mod tests {
         let store = Store::test().await.unwrap();
         let app = router(store, std::env::temp_dir(), Arc::new(Limits::new(true)), Arc::new(Oauth::none().with_password(false)), Arc::new(Mailer::off()), String::new());
         let (s, v) = json(&app, "GET", "/api/auth/options", None, None).await;
-        assert_eq!((s, v), (StatusCode::OK, json!({ "password": false })));
+        assert_eq!((s, v), (StatusCode::OK, json!({ "password": false, "hub": null, "fin": null })));
         for (path, body) in [
             ("/api/auth/signup", json!({"name": "a", "email": "a@x.example", "password": "correct horse battery"})),
             ("/api/auth/signin", json!({"email": "a@x.example", "password": "correct horse battery"})),

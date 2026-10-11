@@ -17,6 +17,21 @@ crates/server   the `pebblelab` binary: CLI, REST (/api), MCP (/mcp and stdio)
 ui/             Leptos web app (wasm, its own workspace)
 ```
 
+## the account hub (pebblelab.in)
+
+One server answers to two addresses. `fin.pebblelab.in` is the app; `pebblelab.in` is the account every pebblelab
+app signs in through: Google or GitHub only, then profile, family, connectors, where you are signed in, and deleting
+the account. The page decides which it is from the address it was opened at (`?app=hub` forces it in development).
+
+- Set `PEBBLELAB_HUB_URL=https://pebblelab.in` and `PEBBLELAB_FIN_URL=https://fin.pebblelab.in`, and point
+  `PEBBLELAB_PUBLIC_URL` at the hub: Google and GitHub send people back to
+  `https://pebblelab.in/api/auth/<provider>/callback`, so register that address with each provider.
+- Fin then sends anyone who needs to sign in to `pebblelab.in/signin?to=fin`. Signed in there, the hub swaps the
+  session for a one-time code (`POST /api/auth/handoff`) and fin redeems it for a session of its own.
+- Without those two settings nothing changes: fin signs people in itself.
+- Passwords go away with `PEBBLELAB_NO_PASSWORD_LOGIN=true` (people keep their accounts: they are matched to
+  Google or GitHub by a verified email).
+
 ## run
 
 ```sh

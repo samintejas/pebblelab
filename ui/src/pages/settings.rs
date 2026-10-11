@@ -11,7 +11,7 @@ use crate::state::AppState;
 const TABS: [(&str, &str, &str, &str); 5] = [
     ("profile", "profile", USER, "your name, picture and how to reach you."),
     ("prefs", "preferences", SLIDERS, "how pebblelab/fin looks and what it tells you about."),
-    ("security", "security", LOCK, "password, sessions and deleting your account."),
+    ("security", "security", LOCK, "how you sign in, sessions and deleting your account."),
     ("family", "family", USERS, "optional. share accounts and hold joint ones."),
     ("connectors", "connectors", PLUG, "give claude code, chatgpt or any mcp client its own token, with its own permissions."),
 ];
@@ -70,7 +70,7 @@ pub fn Settings() -> impl IntoView {
 }
 
 /// Save part of the profile and refresh what the rest of the app knows.
-fn patch_me(app: AppState, body: serde_json::Value, done: impl Fn(Result<(), String>) + 'static) {
+pub(crate) fn patch_me(app: AppState, body: serde_json::Value, done: impl Fn(Result<(), String>) + 'static) {
     leptos::task::spawn_local(async move {
         match api::patch::<User>("/me", &body).await {
             Ok(u) => {
@@ -88,7 +88,7 @@ fn patch_me(app: AppState, body: serde_json::Value, done: impl Fn(Result<(), Str
 }
 
 #[component]
-fn ProfileTab() -> impl IntoView {
+pub(crate) fn ProfileTab() -> impl IntoView {
     let app = expect_context::<AppState>();
     let (name, initials, email, phone) = (RwSignal::new(String::new()), RwSignal::new(String::new()), RwSignal::new(String::new()), RwSignal::new(String::new()));
     let filled = RwSignal::new(false);
@@ -232,8 +232,23 @@ fn Prefs() -> impl IntoView {
     }
 }
 
+/// With the account hub in use, how you sign in and where you are signed in are looked after there.
 #[component]
 fn Security() -> impl IntoView {
+    match api::options().hub {
+        Some(hub) => view! {
+            <section class="d-card" style="max-width:640px" aria-labelledby="sec-hub">
+                <header class="d-card__head"><h2 class="d-card__title" id="sec-hub">"your pebblelab account"</h2></header>
+                <div class="d-card__body"><p>"how you sign in, where you are signed in and deleting your account are managed in your pebblelab account, which every pebblelab app shares."</p></div>
+                <footer class="d-card__foot"><a class="d-btn d-btn--secondary" rel="external" href=format!("{hub}/security")>"open sign-in and security"</a></footer>
+            </section>
+        }.into_any(),
+        None => view! { <SecurityLocal/> }.into_any(),
+    }
+}
+
+#[component]
+fn SecurityLocal() -> impl IntoView {
     let app = expect_context::<AppState>();
     let (cur, new) = (RwSignal::new(String::new()), RwSignal::new(String::new()));
     let err = RwSignal::new(None::<String>);
@@ -319,7 +334,7 @@ fn Security() -> impl IntoView {
 }
 
 #[component]
-fn FamilyTab() -> impl IntoView {
+pub(crate) fn FamilyTab() -> impl IntoView {
     let app = expect_context::<AppState>();
     let name = RwSignal::new(String::new());
     let code = RwSignal::new(String::new());
@@ -490,7 +505,7 @@ const PERMS: [(&str, &str); 4] = [
 /// Tokens for Claude and other clients. Each one has its own name and its own permissions, so one can be
 /// changed or cut off without touching the others.
 #[component]
-fn Connectors() -> impl IntoView {
+pub(crate) fn Connectors() -> impl IntoView {
     let app = expect_context::<AppState>();
     let list = RwSignal::new(Vec::<Connector>::new());
     let loaded = RwSignal::new(false);
@@ -507,7 +522,7 @@ fn Connectors() -> impl IntoView {
         }
         loaded.set(true);
     });
-    let url = format!("{}/mcp", web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default());
+    let url = format!("{}/mcp", api::options().fin.or_else(|| web_sys::window().and_then(|w| w.location().origin().ok())).unwrap_or_default());
     let url2 = url.clone();
     let (url3, url4) = (url.clone(), url.clone());
     let tok = move || fresh.with(|f| f.as_ref().map(|(_, t)| t.clone())).unwrap_or_else(|| "YOUR_TOKEN".to_string());

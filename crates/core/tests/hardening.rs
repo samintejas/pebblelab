@@ -305,3 +305,57 @@ async fn provider_flows_and_login_codes_work_once_and_expire() {
     assert!(matches!(s.redeem_login_code(&code).await, Err(Error::Unauthorized)), "a code lasts two minutes");
     assert!(matches!(s.redeem_login_code("lgc_guess").await, Err(Error::Unauthorized)));
 }
+
+#[tokio::test]
+async fn the_hub_hands_a_signed_in_person_to_an_app_once_and_a_token_cannot() {
+    let s = Store::test().await.unwrap();
+    let first = s.redeem_login_code(&s.external_sign_in(google("g-1", "anita@x.example", true)).await.unwrap()).await.unwrap();
+    let me = s.authenticate(&first.token).await.unwrap();
+    let code = s.handoff(&me).await.unwrap();
+    let fin = s.redeem_login_code_for(&code, "fin").await.unwrap();
+    assert_eq!(fin.user.id, first.user.id);
+    assert!(matches!(s.redeem_login_code_for(&code, "fin").await, Err(Error::Unauthorized)), "a handoff works once");
+    let made = s.create_connector(&me, NewConnector { name: "script".into(), scopes: vec!["read".into(), "edit".into()] }).await.unwrap();
+    let token = s.authenticate(&made.token).await.unwrap();
+    assert!(matches!(s.handoff(&token).await, Err(Error::Forbidden(_))), "an api token cannot open sessions");
+
+    let sec = s.security(&me, &first.token).await.unwrap();
+    assert_eq!(sec.methods.len(), 1);
+    assert_eq!(sec.sessions.len(), 2);
+    assert!(sec.sessions.iter().any(|x| x.current && x.app.is_empty()) && sec.sessions.iter().any(|x| !x.current && x.app == "fin"));
+    let other = sec.sessions.iter().find(|x| !x.current).unwrap().id;
+    s.end_session(&me, other).await.unwrap();
+    assert!(matches!(s.authenticate(&fin.token).await, Err(Error::Unauthorized)), "ending a session signs that place out");
+    assert!(matches!(s.end_session(&me, other).await, Err(Error::NotFound(_))));
+}
+
+#[tokio::test]
+async fn a_way_to_sign_in_is_added_only_for_the_account_that_asked_and_the_last_one_stays() {
+    let s = Store::test().await.unwrap();
+    let a = s.redeem_login_code(&s.external_sign_in(google("g-1", "anita@x.example", true)).await.unwrap()).await.unwrap();
+    let anita = s.authenticate(&a.token).await.unwrap();
+    let (state, _) = s.oauth_start_link(&anita, "github").await.unwrap();
+    assert_eq!(s.oauth_link_user(&state).await.unwrap(), Some(a.user.id));
+    let gh = |subject: &str| ExternalIdentity { provider: "github".into(), subject: subject.into(), email: "anita@x.example".into(), email_verified: true, name: "anita".into(), picture: None };
+    s.link_identity(a.user.id, gh("gh-1")).await.unwrap();
+    assert_eq!(s.identities(a.user.id).await.unwrap(), vec!["github".to_string(), "google".to_string()]);
+    // the same github account cannot also belong to somebody else
+    let b = s.redeem_login_code(&s.external_sign_in(google("g-2", "vikram@x.example", true)).await.unwrap()).await.unwrap();
+    assert!(matches!(s.link_identity(b.user.id, gh("gh-1")).await, Err(Error::Conflict(_))));
+    // and a sign-in with the linked provider is her account
+    let again = s.redeem_login_code(&s.external_sign_in(gh("gh-1")).await.unwrap()).await.unwrap();
+    assert_eq!(again.user.id, a.user.id);
+    s.unlink_identity(&anita, "google").await.unwrap();
+    assert!(matches!(s.unlink_identity(&anita, "github").await, Err(Error::BadRequest(_))), "the last way in stays");
+    assert!(matches!(s.unlink_identity(&anita, "google").await, Err(Error::NotFound(_))));
+}
+
+#[tokio::test]
+async fn someone_without_a_password_deletes_their_account_by_typing_their_email() {
+    let s = Store::test().await.unwrap();
+    let a = s.redeem_login_code(&s.external_sign_in(google("g-1", "anita@x.example", true)).await.unwrap()).await.unwrap();
+    let anita = s.authenticate(&a.token).await.unwrap();
+    assert!(matches!(s.delete_user_confirmed(&anita, "someone@x.example").await, Err(Error::Forbidden(_))));
+    s.delete_user_confirmed(&anita, " Anita@X.example ").await.unwrap();
+    assert!(matches!(s.authenticate(&a.token).await, Err(Error::Unauthorized)));
+}

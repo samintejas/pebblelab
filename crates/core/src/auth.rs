@@ -6,7 +6,7 @@ use sqlx::{AssertSqlSafe, Row};
 use crate::api::*;
 use crate::{Caller, Error, Result, Store, clean};
 
-fn hash_token(token: &str) -> String {
+pub(crate) fn hash_token(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
 
@@ -133,11 +133,17 @@ impl Store {
     }
 
     pub(crate) async fn open_session(&self, user_id: i64) -> Result<Session> {
+        self.open_session_for(user_id, "").await
+    }
+
+    /// A session that remembers which app opened it (`fin`, `account`), for the list of where someone is signed in.
+    pub(crate) async fn open_session_for(&self, user_id: i64, app: &str) -> Result<Session> {
         let token = new_token("trs");
-        sqlx::query("INSERT INTO tokens (user_id, kind, token_hash, tail) VALUES ($1, 'session', $2, $3)")
+        sqlx::query("INSERT INTO tokens (user_id, kind, token_hash, tail, app) VALUES ($1, 'session', $2, $3, $4)")
             .bind(user_id)
             .bind(hash_token(&token))
             .bind(&token[token.len() - 4..])
+            .bind(app)
             .execute(&self.pool)
             .await?;
         Ok(Session { token, user: self.user(user_id).await? })
@@ -357,6 +363,20 @@ impl Store {
         if !verify_password(password, &hash) {
             return Err(Error::Forbidden("password is wrong".into()));
         }
+        self.remove_user(c).await
+    }
+
+    /// The same for someone who signs in through a provider and has no password: they type their email to confirm.
+    pub async fn delete_user_confirmed(&self, c: &Caller, email: &str) -> Result<()> {
+        c.need("edit")?;
+        let theirs: String = sqlx::query("SELECT email FROM users WHERE id = $1").bind(c.user_id).fetch_one(&self.pool).await?.get(0);
+        if !c.is_interactive() || theirs.trim().to_lowercase() != email.trim().to_lowercase() {
+            return Err(Error::Forbidden("that is not your email address".into()));
+        }
+        self.remove_user(c).await
+    }
+
+    async fn remove_user(&self, c: &Caller) -> Result<()> {
         let mut db = self.pool.begin().await?;
         self.leave_family_on(&mut db, c.user_id).await?;
         let alone: Vec<i64> = sqlx::query(

@@ -235,3 +235,69 @@ pub async fn download(path: &str, filename: &str) -> Result<(), ApiError> {
     let _ = web_sys::Url::revoke_object_url(&url);
     Ok(())
 }
+
+// ---- the account hub ----------------------------------------------------------------------------------
+
+thread_local! {
+    static OPTIONS: std::cell::RefCell<Options> = std::cell::RefCell::new(Options::default());
+}
+
+/// What the server says about how people sign in here.
+#[derive(Clone, Default, serde::Deserialize)]
+pub struct Options {
+    #[serde(default = "yes")]
+    pub password: bool,
+    /// The account hub's address, when it is in use (https://pebblelab.in).
+    pub hub: Option<String>,
+    /// Fin's address, where the hub sends people on.
+    pub fin: Option<String>,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// Ask the server once, before the app starts.
+pub async fn load_options() {
+    if let Ok(o) = get::<Options>("/auth/options").await {
+        OPTIONS.with(|c| *c.borrow_mut() = o);
+    }
+}
+
+pub fn options() -> Options {
+    OPTIONS.with(|c| c.borrow().clone())
+}
+
+/// Is this page the hub (pebblelab.in) and not an app? Decided by the address the page was opened at; a dev
+/// server can be told with `?app=hub` (remembered in this browser), `?app=fin` to forget it.
+pub fn is_hub() -> bool {
+    let Some(w) = web_sys::window() else { return false };
+    let host = w.location().hostname().unwrap_or_default();
+    if let Ok(q) = w.location().search() {
+        let q: std::collections::HashMap<String, String> = serde_urlencoded::from_str(q.trim_start_matches('?')).unwrap_or_default();
+        if let (Some(app), Some(s)) = (q.get("app"), w.local_storage().ok().flatten()) {
+            let _ = if app == "hub" { s.set_item("pebblelab:app", "hub") } else { s.remove_item("pebblelab:app") };
+        }
+    }
+    let forced = w.local_storage().ok().flatten().and_then(|s| s.get_item("pebblelab:app").ok().flatten()).as_deref() == Some("hub");
+    forced || host == "pebblelab.in" || host == "www.pebblelab.in" || host.starts_with("hub.")
+}
+
+/// Where to send someone who needs to sign in, when the hub is in use: `{hub}/signin?to=fin`.
+pub fn hub_sign_in() -> Option<String> {
+    options().hub.map(|h| format!("{h}/signin?to=fin"))
+}
+
+/// Swap the signed-in person for a one-time code and open fin with it.
+pub async fn open_fin() -> Result<(), ApiError> {
+    #[derive(serde::Deserialize)]
+    struct Code {
+        code: String,
+    }
+    let fin = options().fin.ok_or(ApiError { status: 0, message: "fin is not set up on this server".into() })?;
+    let c: Code = post("/auth/handoff", &serde_json::json!({})).await?;
+    if let Some(w) = web_sys::window() {
+        let _ = w.location().set_href(&format!("{fin}/auth/callback#code={}", c.code));
+    }
+    Ok(())
+}

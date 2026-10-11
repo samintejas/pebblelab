@@ -58,6 +58,13 @@ pub enum Cmd {
         github_client_id: Option<String>,
         #[arg(long, env = "PEBBLELAB_GITHUB_CLIENT_SECRET", hide_env_values = true)]
         github_client_secret: Option<String>,
+        /// The account hub's address, e.g. https://pebblelab.in. When set, the apps (fin) send people there to sign in
+        /// and it is where Google and GitHub come back to: set `PEBBLELAB_PUBLIC_URL` to it as well.
+        #[arg(long, env = "PEBBLELAB_HUB_URL")]
+        hub_url: Option<String>,
+        /// Fin's address, e.g. https://fin.pebblelab.in: where the hub sends people on after sign-in.
+        #[arg(long, env = "PEBBLELAB_FIN_URL")]
+        fin_url: Option<String>,
         /// Turn email-and-password sign-up, sign-in and reset off, so the only way in is a provider (Google, GitHub).
         /// Needs at least one provider set up, or nobody can sign in.
         #[arg(long, env = "PEBBLELAB_NO_PASSWORD_LOGIN")]

@@ -7,6 +7,7 @@ d=$(dirname "$(readlink -f "$0")")
 install -d /etc/caddy/conf.d
 install -m 644 "$d/Caddyfile" /etc/caddy/Caddyfile
 install -m 644 "$d/fin.caddy" /etc/caddy/conf.d/fin.caddy
+install -m 644 "$d/pebblelab.caddy" /etc/caddy/conf.d/pebblelab.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 install -m 644 "$d/pebblelab.service" /etc/systemd/system/pebblelab.service
 install -m 644 "$d/pg-backup.service" /etc/systemd/system/pg-backup.service
