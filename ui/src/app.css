@@ -12,9 +12,6 @@
 @keyframes ins-draw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .ins-grow { animation: none; } .ins-line { animation: none; stroke-dashoffset: 0; } }
 
-.d-avatar:has(svg), .d-avatar:has(img) { border-radius: 9999px; }
-/* the design system greys photos out by default; people recognise each other in colour */
-.d-avatar img { filter: none; }
 
 /* insights grid: fills the screen under the bar, cards share the height */
 .dash-wrap { display: flex; flex-direction: column; gap: 16px; height: calc(100dvh - 80px); min-height: 560px; }

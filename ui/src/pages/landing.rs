@@ -59,8 +59,7 @@ fn PebbleLanding() -> impl IntoView {
         <div style="background:var(--bg-base);color:var(--text-primary);min-height:100dvh;display:flex;flex-direction:column">
             <SkipLink/>
             <header class="d-appbar">
-                <span style="margin-left:4px;display:flex"><Mark/></span>
-                <span class="d-appbar__title">"pebblelab"</span>
+                <a href="/" aria-label="pebblelab, home" style="margin-left:4px;display:flex;flex:none"><Logo height=18/></a>
                 <span class="d-appbar__spacer"></span>
                 <ButtonLink href="/signin" size=Size::Sm>"sign in"</ButtonLink>
             </header>
@@ -78,7 +77,7 @@ fn PebbleLanding() -> impl IntoView {
                     {move || site.get().apps.into_iter().filter(|a| a.id != "account").map(|a| view! {
                         <a class="d-card" href=a.url.clone() rel="external" style="text-decoration:none;color:inherit">
                             <div class="d-card__body d-row" style="gap:12px;flex-wrap:nowrap;align-items:flex-start">
-                                <span class="d-apps__mark" aria-hidden="true"><Mark/></span>
+                                <span class="d-apps__mark" aria-hidden="true"><Icon name="wallet"/></span>
                                 <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
                                     <span style="color:var(--text-strong);font-weight:500">{format!("pebblelab/{}", a.name)}</span>
                                     <span style="color:var(--text-secondary)">{a.summary.clone()}</span>
@@ -90,7 +89,7 @@ fn PebbleLanding() -> impl IntoView {
             </main>
             <footer style="border-top:1px solid var(--border-default)">
                 <div class="d-container d-row" style="padding-block:16px;justify-content:space-between;font-size:var(--font-size-sm);color:var(--text-secondary)">
-                    <span>"pebblelab"</span>
+                    <Logo height=14/>
                     <span>"pebblelab.in"</span>
                 </div>
             </footer>
@@ -110,8 +109,7 @@ pub fn Landing() -> impl IntoView {
         <div style="background:var(--bg-base);color:var(--text-primary);min-height:100dvh">
             <SkipLink/>
             <header class="d-appbar">
-                <span style="margin-left:4px;display:flex"><Mark/></span>
-                <span class="d-appbar__title">"pebblelab/fin"</span>
+                <span style="margin-left:4px;display:flex;align-items:center;gap:8px;flex:none"><Logo height=18/><span class="d-appbar__title" style="color:var(--text-secondary)">"fin"</span></span>
                 <span class="d-appbar__sep" aria-hidden="true"></span>
                 <nav class="d-appbar__nav" aria-label="main">
                     <a class="d-appbar__link" href="#views" rel="external">"views"</a>

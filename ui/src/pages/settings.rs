@@ -11,13 +11,6 @@ use crate::icons::*;
 use crate::site::{self, use_site};
 use crate::state::AppState;
 
-pub fn copy(app: AppState, text: String) {
-    if let Some(w) = web_sys::window() {
-        let _ = w.navigator().clipboard().write_text(&text);
-        app.ok("copied");
-    }
-}
-
 /// Sections that moved to the account when fin became one app under it.
 const MOVED: [&str; 4] = ["profile", "security", "family", "connectors"];
 

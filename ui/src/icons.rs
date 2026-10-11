@@ -3,7 +3,6 @@
 use leptos::prelude::*;
 
 pub const WALLET: &str = "M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4";
-pub const UP_DOWN: &str = "M7 15l5 5 5-5M7 9l5-5 5 5";
 pub const PANEL_RIGHT: &str = "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v18";
 pub const BELL: &str = "M10.268 21a2 2 0 0 0 3.464 0M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326";
 pub const BACK: &str = "M19 12H5M12 19l-7-7 7-7";
@@ -32,14 +31,24 @@ pub fn Ico(d: &'static str, #[prop(optional)] small: bool, #[prop(optional)] lar
     view! { <span class=class aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d=d></path></svg></span> }
 }
 
-/// The pebblelab/fin mark: three dots rising.
+/// The pebblelab mark: the p of the logo, in the accent.
 #[component]
-pub fn Mark() -> impl IntoView {
+pub fn Mark(#[prop(default = 20)] size: u32) -> impl IntoView {
     view! {
-        <svg viewBox="0 0 24 24" width="20" height="20" focusable="false" aria-hidden="true" style="flex:none">
-            <circle cx="4.5" cy="19" r="1.5" fill="var(--text-subtle)"></circle>
-            <circle cx="10" cy="14.5" r="2.25" fill="var(--text-secondary)"></circle>
-            <circle cx="17.5" cy="7.5" r="4" fill="var(--accent-primary)"></circle>
+        <svg viewBox=crate::brand::MARK_BOX width=size height=size focusable="false" aria-hidden="true" style="flex:none">
+            <path d=crate::brand::P fill="var(--accent-primary)"></path>
+        </svg>
+    }
+}
+
+/// The full logo, the word. `height` is the height of the ink in px; the width follows. Named for assistive tech.
+#[component]
+pub fn Logo(#[prop(default = 20)] height: u32) -> impl IntoView {
+    use crate::brand::*;
+    let width = (WORD_W * height as f32 / 37.4).round() as u32;
+    view! {
+        <svg viewBox=format!("0 3.2 {WORD_W} 37.4") width=width height=height role="img" aria-label="pebblelab" style="flex:none;display:block">
+            <path d=WORD fill="var(--text-strong)"></path>
         </svg>
     }
 }

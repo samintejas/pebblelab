@@ -7,6 +7,7 @@ mod insights;
 mod landing;
 mod settings;
 mod shell;
+mod status;
 mod subscriptions;
 mod transactions;
 
@@ -18,5 +19,6 @@ pub use insights::Insights;
 pub use landing::Home;
 pub use settings::Settings;
 pub use shell::AppShell;
+pub use status::{NotFound, Opening};
 pub use subscriptions::{SubPanel, Subscriptions};
 pub use transactions::Transactions;

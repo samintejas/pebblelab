@@ -5,7 +5,7 @@ use leptos_router::hooks::use_navigate;
 use pebblelab_api::*;
 
 use crate::api;
-use crate::icons::Mark;
+use crate::icons::Logo;
 use crate::site::{self, use_site};
 
 /// On an address that only serves an app, these pages live in the account: go there, keeping where the
@@ -56,7 +56,7 @@ fn AuthPage(title: &'static str, #[prop(into)] sub: String, other: AnyView, #[pr
         <SkipLink/>
         <div style="min-height:100dvh;display:flex;flex-direction:column;background:var(--bg-base)">
             <AppBar>
-                <A href="/" attr:class="d-appbar__title" attr:style="text-decoration:none;display:flex;align-items:center;gap:8px"><Mark/>"pebblelab"</A>
+                <A href="/" attr:aria-label="pebblelab, home" attr:style="display:flex;margin-left:4px;flex:none"><Logo height=18/></A>
                 <AppBarSpacer/>
                 {other}
             </AppBar>

@@ -9,7 +9,7 @@ use wasm_bindgen::JsCast;
 
 use crate::api;
 use crate::icons::*;
-use crate::pages::apps::AppsMenu;
+use crate::pages::apps::Switcher;
 use crate::site::{self, use_site};
 use crate::state::AppState;
 
@@ -94,28 +94,42 @@ pub fn Account() -> impl IntoView {
     });
     let def = move || *SECTIONS.iter().find(|x| x.0 == tab.get()).unwrap_or(&SECTIONS[0]);
     let family_count = Signal::derive(move || app.me.with(|m| m.as_ref().and_then(|m| m.family.as_ref()).map(|f| f.members.len().to_string()).unwrap_or_default()));
+    let shell = ShellState::new();
+    let ready = Memo::new(move |_| app.me.with(|m| m.is_some()));
     view! {
+        <Show when=move || ready.get() fallback=|| view! { <crate::pages::Opening app="your account"/> }>
         <SkipLink/>
-        <div style="min-height:100dvh;display:flex;flex-direction:column;background:var(--bg-base)">
-            <AppBar>
-                <a class="d-appbar__title" href="/account" style="text-decoration:none;display:flex;align-items:center;gap:8px;flex:none"><Mark/>"pebblelab account"</a>
-                <AppBarSpacer/>
-                <AppsMenu current="account"/>
-                <AccountMenu/>
-            </AppBar>
-            <main id="main" tabindex="-1" style="flex:1;min-height:0;padding:16px">
-                <SectionNavLayout height="calc(100dvh - 64px)">
-                    <SectionNav label="account">
+        <Shell state=shell height="100dvh">
+            <Sidebar>
+                <SidebarHead>
+                    <Switcher current="account"/>
+                </SidebarHead>
+                <SidebarContent>
+                    <SidebarGroup label="account">
                         {SECTIONS.iter().map(|(key, label, icon, _)| {
                             let href = if *key == "home" { "/account".to_string() } else { format!("/account/{key}") };
-                            let count = (*key == "family").then_some(family_count);
-                            match count {
-                                Some(c) => view! { <SectionNavItem href=href icon=*icon label=*label current=Signal::derive(move || tab.get() == *key) count=c/> }.into_any(),
-                                None => view! { <SectionNavItem href=href icon=*icon label=*label current=Signal::derive(move || tab.get() == *key)/> }.into_any(),
+                            let current = Signal::derive(move || tab.get() == *key);
+                            if *key == "family" {
+                                view! { {move || view! { <SidebarItem href=href.clone() icon=*icon label=*label current=current count=family_count.get()/> }} }.into_any()
+                            } else {
+                                view! { <SidebarItem href=href icon=*icon label=*label current=current/> }.into_any()
                             }
                         }).collect_view()}
-                    </SectionNav>
-                    <div>
+                    </SidebarGroup>
+                </SidebarContent>
+            </Sidebar>
+            <ShellMain>
+                <AppBar>
+                    <SidebarToggle/>
+                    <AppBarSep/>
+                    <Breadcrumbs>
+                        <Crumb href="/account">"account"</Crumb>
+                        <CrumbCurrent>{move || def().1}</CrumbCurrent>
+                    </Breadcrumbs>
+                    <AppBarSpacer/>
+                </AppBar>
+                <Main>
+                    <div class="page" style="display:flex;flex-direction:column;gap:16px;max-width:880px">
                         <div style="display:flex;flex-direction:column;gap:4px">
                             <h1 class="heading-xl" style="color:var(--text-strong)">{move || def().1}</h1>
                             <span style="color:var(--text-secondary)">{move || def().3}</span>
@@ -128,46 +142,10 @@ pub fn Account() -> impl IntoView {
                             _ => view! { <Home/> }.into_any(),
                         }}
                     </div>
-                </SectionNavLayout>
-            </main>
-        </div>
-    }
-}
-
-/// The avatar at the end of the account's app bar: who is signed in, the theme, and signing out.
-#[component]
-fn AccountMenu() -> impl IntoView {
-    let app = expect_context::<AppState>();
-    let theme = use_theme();
-    let theme_name = RwSignal::new(theme.get_untracked().as_str().to_string());
-    Effect::new(move |_| {
-        let t = Theme::parse(&theme_name.get()).unwrap_or_default();
-        if theme.get_untracked() != t {
-            theme.set(t);
-        }
-    });
-    let picture = Signal::derive(move || app.me.with(|m| m.as_ref().and_then(|m| m.user.picture.clone())));
-    let name = move || app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default());
-    let email = move || app.me.with(|m| m.as_ref().map(|m| m.user.email.clone()).unwrap_or_default());
-    let sign_out = move |()| {
-        leptos::task::spawn_local(async move {
-            let _ = api::post::<serde_json::Value>("/auth/signout", &serde_json::json!({})).await;
-            api::clear_token();
-            app.me.set(None);
-        });
-    };
-    view! {
-        <Menu label="account" trigger=move || view! {
-            <button type="button" class="d-avatar" aria-label=move || format!("account: {}", name())><Face picture=picture/></button>
-        }>
-            <MenuHead><span class="d-menu__who"><b>{name}</b><small>{email}</small></span></MenuHead>
-            <MenuRadioGroup label="theme" value=theme_name>
-                <MenuRadio value="dark">"dark"</MenuRadio>
-                <MenuRadio value="light">"light"</MenuRadio>
-            </MenuRadioGroup>
-            <MenuSeparator/>
-            <MenuItem on_select=sign_out>"sign out"</MenuItem>
-        </Menu>
+                </Main>
+            </ShellMain>
+        </Shell>
+        </Show>
     }
 }
 

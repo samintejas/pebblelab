@@ -1,4 +1,5 @@
 mod api;
+mod brand;
 mod fmt;
 mod icons;
 mod pages;
@@ -7,7 +8,7 @@ mod state;
 
 use dots_ui::prelude::*;
 use leptos::prelude::*;
-use leptos_router::components::{ParentRoute, Redirect, Route, Router, Routes};
+use leptos_router::components::{ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
 fn main() {
@@ -23,7 +24,7 @@ fn App() -> impl IntoView {
         <style>{include_str!("app.css")}</style>
         <DotsProvider persist_theme="pebblelab:theme">
             <Router>
-                <Routes fallback=|| view! { <Redirect path="/"/> }>
+                <Routes fallback=pages::NotFound>
                     <Route path=path!("/") view=pages::Home/>
                     <Route path=path!("/account") view=pages::Account/>
                     <Route path=path!("/account/:tab") view=pages::Account/>

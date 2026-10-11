@@ -5,7 +5,7 @@ use leptos_router::hooks::{use_location, use_navigate};
 
 use crate::api;
 use crate::icons::*;
-use crate::pages::apps::AppsMenu;
+use crate::pages::apps::Switcher;
 use crate::site::{self, use_site};
 use crate::pages::transactions::TxPanel;
 use crate::pages::{AssetPanel, SubPanel};
@@ -91,42 +91,17 @@ pub fn AppShell() -> impl IntoView {
         }
     };
 
-    let theme = use_theme();
-    let theme_name = RwSignal::new(theme.get_untracked().as_str().to_string());
-    Effect::new(move |_| {
-        let t = Theme::parse(&theme_name.get()).unwrap_or_default();
-        if theme.get_untracked() != t {
-            theme.set(t);
-        }
-    });
-    Effect::new(move |_| theme_name.set(theme.get().as_str().to_string()));
-
-    // signing out of fin signs this browser out of the account too
-    let sign_out = move |()| {
-        leptos::task::spawn_local(async move {
-            let _ = api::post::<serde_json::Value>("/auth/signout", &serde_json::json!({})).await;
-            api::clear_token();
-            site::go_external("/");
-        });
-    };
-    let account_link = move |section: &str| site.account_href(&format!("/account{section}"));
-    let tile_name = move || app.me.with(|m| match m {
-        Some(m) => m.family.as_ref().map(|f| f.name.clone()).unwrap_or_else(|| m.user.name.clone()),
-        None => String::new(),
-    });
-    let picture = Signal::derive(move || app.me.with(|m| m.as_ref().and_then(|m| m.user.picture.clone())));
     let acct_count = move || app.accounts.with(|a| a.iter().filter(|a| !a.archived).count());
-    let go_tx = { let nav = nav.clone(); move |_| nav("/transactions", Default::default()) };
 
+    // until we know who is signed in, the opening screen
+    let ready = Memo::new(move |_| app.me.with(|m| m.is_some()));
     view! {
+        <Show when=move || ready.get() fallback=|| view! { <crate::pages::Opening app="fin"/> }>
         <SkipLink/>
         <Shell state=shell height="100dvh">
             <Sidebar>
                 <SidebarHead>
-                    <button type="button" class="d-sidebar__tile" aria-label="pebblelab/fin, go to transactions" on:click=go_tx>
-                        <Mark/>
-                        <span class="d-sidebar__who"><b>"pebblelab/fin"</b><small>{tile_name}</small></span>
-                    </button>
+                    <Switcher current="fin" extra=|| view! { <MenuLink href="/settings">"fin settings"</MenuLink> }/>
                 </SidebarHead>
                 <SidebarContent>
                     <SidebarGroup label="money">
@@ -139,32 +114,6 @@ pub fn AppShell() -> impl IntoView {
                         <SidebarItem href="/assets" icon="package" label="assets" current=Signal::derive(move || page.get() == "assets")/>
                     </SidebarGroup>
                 </SidebarContent>
-                <SidebarFoot>
-                    <Menu
-                        label="account" match_width=true
-                        trigger=move || view! {
-                            <button type="button" class="d-sidebar__tile" aria-label=move || format!("account: {}", app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default()))>
-                                <span class="d-avatar" aria-hidden="true"><Face picture=picture/></span>
-                                <span class="d-sidebar__who">
-                                    <b>{move || app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default())}</b>
-                                    <small>{move || app.me.with(|m| m.as_ref().map(|m| m.user.email.clone()).unwrap_or_default())}</small>
-                                </span>
-                                <Ico d=UP_DOWN/>
-                            </button>
-                        }
-                    >
-                        <MenuLink href="/settings">"fin settings"</MenuLink>
-                        <MenuLink href=account_link("")>"pebblelab account"</MenuLink>
-                        <MenuLink href=account_link("/family")>"family"</MenuLink>
-                        <MenuSeparator/>
-                        <MenuRadioGroup label="theme" value=theme_name>
-                            <MenuRadio value="dark">"dark"</MenuRadio>
-                            <MenuRadio value="light">"light"</MenuRadio>
-                        </MenuRadioGroup>
-                        <MenuSeparator/>
-                        <MenuItem on_select=sign_out>"sign out"</MenuItem>
-                    </Menu>
-                </SidebarFoot>
             </Sidebar>
             <ShellMain>
                 <AppBar>
@@ -176,7 +125,6 @@ pub fn AppShell() -> impl IntoView {
                     </Breadcrumbs>
                     <AppBarSpacer/>
                     <Notifications/>
-                    <AppsMenu current="fin"/>
                 </AppBar>
                 <Main><div class="page"><Outlet/></div></Main>
             </ShellMain>
@@ -188,6 +136,7 @@ pub fn AppShell() -> impl IntoView {
                 })}
             </aside>
         </Shell>
+        </Show>
     }
 }
 
