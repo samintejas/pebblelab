@@ -29,13 +29,5 @@
 /* the big amount field in the side panel */
 .amt:focus-within { box-shadow: inset 0 -1px 0 var(--focus-ring); }
 
-/* landing: the one decorated surface, outside the app chrome */
-.lp-hero { position: relative; overflow: hidden; background-image: radial-gradient(circle at center, var(--accent-primary-subtle) 0%, transparent 60%), radial-gradient(circle at center, var(--accent-info-subtle) 0%, transparent 60%); background-repeat: no-repeat; background-size: 640px 640px, 720px 720px; background-position: 95% -40%, 55% 160%; animation: lp-orbs 24s ease-in-out infinite alternate; }
-.lp-hero::before, .lp-hero::after { content: ""; position: absolute; inset: -24px; pointer-events: none; -webkit-mask-image: radial-gradient(ellipse 60% 90% at 78% 45%, #000 0%, transparent 75%); mask-image: radial-gradient(ellipse 60% 90% at 78% 45%, #000 0%, transparent 75%); }
-.lp-hero::before { background-image: radial-gradient(var(--neutral-5) 1px, transparent 1.5px); background-size: 24px 24px; animation: lp-drift 48s linear infinite; }
-.lp-hero::after { background-image: radial-gradient(var(--accent-primary) 1.5px, transparent 2.5px), radial-gradient(var(--accent-info) 1.5px, transparent 2.5px), radial-gradient(var(--accent-success) 1.5px, transparent 2.5px), radial-gradient(var(--accent-warning) 1.5px, transparent 2.5px); background-size: 168px 120px, 216px 168px, 264px 144px, 312px 216px; background-position: 36px 12px, 108px 84px, 60px 108px, 180px 36px; animation: lp-glow 6s ease-in-out infinite; }
-.lp-hero > * { position: relative; z-index: 1; }
-@keyframes lp-drift { to { transform: translate(24px, 24px); } }
-@keyframes lp-glow { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
-@keyframes lp-orbs { to { background-position: 75% -10%, 70% 130%; } }
-@media (prefers-reduced-motion: reduce) { .lp-hero, .lp-hero::before, .lp-hero::after { animation: none; } }
+/* landing: flat like the rest; the hero is just space and type */
+.lp-hero { position: relative; }
