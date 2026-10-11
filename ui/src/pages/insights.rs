@@ -181,7 +181,7 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
             <section class="d-card" aria-labelledby="iv-nw">
                 <header class="d-card__head"><h2 class="d-card__title" id="iv-nw">"what you own and owe"</h2><span class="d-card__meta">{format!("net {}", app.signed(i.assets - i.owed))}</span></header>
                 <div class="d-card__body" style="display:flex;flex-direction:column;gap:12px">
-                    <div role="img" aria-label=bal_aria style="display:flex;height:28px;gap:2px;background:var(--bg-inset)">
+                    <div role="img" aria-label=bal_aria style="display:flex;height:28px;gap:2px;background:var(--bg-fill)">
                         {bal.iter().map(|(label, v, bg, o)| view! {
                             <div class="ins-grow" title=format!("{label}: {}", money(*v)) style=format!("flex:{};min-width:2px;background:{bg};opacity:{o}", (*v / 100_000).max(1))></div>
                         }).collect_view()}
@@ -203,7 +203,7 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
             <section class="d-card" aria-labelledby="c-cat">
                 <header class="d-card__head"><h2 class="d-card__title" id="c-cat">"where it went"</h2><span class="d-card__meta">{format!("last 30 days · {}", money(i.spending))}</span></header>
                 <div class="d-card__body" style="display:flex;flex-direction:column;gap:12px">
-                    <div role="img" aria-label=cat_aria style="display:flex;height:28px;gap:2px;background:var(--bg-inset)">
+                    <div role="img" aria-label=cat_aria style="display:flex;height:28px;gap:2px;background:var(--bg-fill)">
                         {cats.iter().map(|(label, v, o)| view! {
                             <div class="ins-grow" title=format!("{label}: {}", money(*v)) style=format!("flex:{};min-width:2px;background:var(--text-strong);opacity:{o:.2}", (*v).max(1))></div>
                         }).collect_view()}
@@ -228,7 +228,7 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
                     <div role="img" aria-label=format!("spending by day for this month. {spend_days} days with spending.") style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px">
                         {["m", "t", "w", "t", "f", "s", "s"].into_iter().map(|d| view! { <span style="color:var(--text-secondary);font-size:var(--font-size-xs);text-align:center">{d}</span> }).collect_view()}
                         {heat.into_iter().map(|(title, o, is_today)| view! {
-                            <span title=title style=format!("position:relative;height:26px;background:var(--bg-inset);outline:{}", if is_today { "1px solid var(--border-strong)" } else { "none" })>
+                            <span title=title style=format!("position:relative;height:26px;background:var(--bg-fill);outline:{}", if is_today { "1px solid var(--border-strong)" } else { "none" })>
                                 <span style=format!("position:absolute;inset:0;background:var(--accent-primary);opacity:{o:.2}")></span>
                             </span>
                         }).collect_view()}
@@ -237,7 +237,7 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
                         <span>{heat_note}</span>
                         <span class="d-row" aria-hidden="true" style="gap:3px;color:var(--text-secondary);font-size:var(--font-size-xs)">
                             "less"
-                            <span style="width:12px;height:12px;background:var(--bg-inset)"></span>
+                            <span style="width:12px;height:12px;background:var(--bg-fill)"></span>
                             <span style="width:12px;height:12px;background:var(--accent-primary);opacity:.3"></span>
                             <span style="width:12px;height:12px;background:var(--accent-primary);opacity:.6"></span>
                             <span style="width:12px;height:12px;background:var(--accent-primary)"></span>
@@ -256,7 +256,7 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
                                 <span style="color:var(--text-strong);font-weight:500">{name}</span>
                                 <span><b style="color:var(--text-max);font-weight:500">{left}</b>{format!(" months left · {balance}")}</span>
                             </div>
-                            <div role="img" aria-label=paid.clone() style="position:relative;height:10px;background:repeating-linear-gradient(90deg, var(--bg-inset) 0 3px, transparent 3px 6px)">
+                            <div role="img" aria-label=paid.clone() style="position:relative;height:10px;background:repeating-linear-gradient(90deg, var(--bg-fill) 0 3px, transparent 3px 6px)">
                                 <div class="ins-grow" style=format!("position:absolute;inset:0 auto 0 0;width:{pct};background:var(--text-strong)")></div>
                                 <span aria-hidden="true" style=format!("position:absolute;top:-5px;bottom:-5px;left:{pct};width:2px;background:var(--accent-primary)")></span>
                             </div>

@@ -24,7 +24,7 @@ fn Runway(name: &'static str, left: &'static str, paid: &'static str, pct: u32) 
     view! {
         <div style="display:flex;flex-direction:column;gap:6px">
             <div class="d-row" style="justify-content:space-between"><span style="color:var(--text-strong)">{name}</span><span>{left}</span></div>
-            <div role="img" aria-label=paid style="position:relative;height:10px;background:repeating-linear-gradient(90deg,var(--bg-inset) 0 3px,transparent 3px 6px)">
+            <div role="img" aria-label=paid style="position:relative;height:10px;background:repeating-linear-gradient(90deg,var(--bg-fill) 0 3px,transparent 3px 6px)">
                 <div style=format!("position:absolute;inset:0 auto 0 0;width:{pct}%;background:var(--text-strong)")></div>
                 <span style=format!("position:absolute;top:-5px;bottom:-5px;left:{pct}%;width:2px;background:var(--accent-primary)")></span>
             </div>
@@ -173,7 +173,7 @@ pub fn Landing() -> impl IntoView {
                                 <div class="d-card__body">
                                     <div role="img" aria-label="a calendar of four weeks, brighter on days with more spending" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px">
                                         {HEAT.iter().map(|o| view! {
-                                            <span style="position:relative;height:22px;background:var(--bg-inset)"><span style=format!("position:absolute;inset:0;background:var(--accent-primary);opacity:{o}")></span></span>
+                                            <span style="position:relative;height:22px;background:var(--bg-fill)"><span style=format!("position:absolute;inset:0;background:var(--accent-primary);opacity:{o}")></span></span>
                                         }).collect_view()}
                                     </div>
                                 </div>
