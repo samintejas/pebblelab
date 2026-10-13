@@ -32,6 +32,17 @@ the account. The page decides which it is from the address it was opened at (`?a
 - Passwords go away with `PEBBLELAB_NO_PASSWORD_LOGIN=true` (people keep their accounts: they are matched to
   Google or GitHub by a verified email).
 
+## the apps under pebblelab
+
+Pebblelab is the umbrella: one account, one family and one set of connectors, with apps under it. Fin is the first.
+The web app keeps the list in `ui/src/apps.rs`, and the hub's landing page, the account's home and the switcher at
+the top of every sidebar are drawn from it. The switcher is the same in the account and in each app: who you are,
+the apps, the household you are looking at (the family, or just you), the theme, and signing out. The household
+you pick is kept in a cookie on the address the apps share, so each of them follows it.
+
+To add an app: a row in `APPS` (id, name, one line, address, glyph), its address in `AppDef::url`, which app a page
+is in `apps::here`, and its screens.
+
 ## run
 
 ```sh

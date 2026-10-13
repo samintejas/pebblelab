@@ -36,18 +36,6 @@ pub fn Ico(d: &'static str, #[prop(optional)] small: bool, #[prop(optional)] lar
     view! { <span class=class aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d=d></path></svg></span> }
 }
 
-/// The pebblelab/fin mark: three dots rising.
-#[component]
-pub fn Mark() -> impl IntoView {
-    view! {
-        <svg viewBox="0 0 24 24" width="20" height="20" focusable="false" aria-hidden="true" style="flex:none">
-            <circle cx="4.5" cy="19" r="1.5" fill="var(--text-subtle)"></circle>
-            <circle cx="10" cy="14.5" r="2.25" fill="var(--text-secondary)"></circle>
-            <circle cx="17.5" cy="7.5" r="4" fill="var(--accent-primary)"></circle>
-        </svg>
-    }
-}
-
 /// A person's avatar content: their picture, or the grey placeholder figure.
 #[component]
 pub fn Face(#[prop(into)] picture: Signal<Option<String>>) -> impl IntoView {

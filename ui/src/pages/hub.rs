@@ -1,5 +1,6 @@
 //! pebblelab.in: the account every pebblelab app signs in through. Landing, sign in with Google or GitHub (no
-//! passwords), and the account itself: profile, sign-in and security, family, connectors.
+//! passwords), and the account itself: profile, sign-in and security, family, connectors. The apps it lists
+//! come from `crate::apps`.
 
 use dots_ui::prelude::*;
 use leptos::prelude::*;
@@ -9,8 +10,10 @@ use leptos_router::path;
 use pebblelab_api::*;
 
 use super::settings::{Connectors, FamilyTab, ProfileTab};
+use super::switcher::Switcher;
 use crate::api;
-use crate::hub_art::{FIN, MARK, WORDMARK};
+use crate::apps::{self, APPS, Glyph};
+use crate::hub_art::{MARK, WORDMARK};
 use crate::icons::*;
 use crate::state::AppState;
 
@@ -57,24 +60,11 @@ pub fn HubApp() -> impl IntoView {
 }
 
 #[component]
-fn Wordmark(#[prop(default = 115)] width: u32, #[prop(default = "var(--text-strong)")] fill: &'static str) -> impl IntoView {
+pub fn Wordmark(#[prop(default = 115)] width: u32, #[prop(default = "var(--text-strong)")] fill: &'static str) -> impl IntoView {
     let height = width * 14 / 89;
     view! {
         <svg viewBox="0 3.2 238.1 37.4" width=width height=height role="img" aria-label="pebblelab" style="display:block;flex:none"><path d=WORDMARK fill=fill></path></svg>
     }
-}
-
-#[component]
-fn FinGlyph() -> impl IntoView {
-    view! {
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d=FIN></path><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path>
-        </svg>
-    }
-}
-
-fn fin_href() -> String {
-    api::options().fin.unwrap_or_else(|| "/".into())
 }
 
 /// Google and GitHub, nothing else. A full page load: the provider is another site.
@@ -123,11 +113,13 @@ fn Landing() -> impl IntoView {
                 </section>
                 <section class="d-container" style="padding-bottom:72px;display:flex;flex-direction:column;gap:12px;max-width:880px" aria-labelledby="pl-apps">
                     <h2 class="heading-lg" id="pl-apps" style="margin:0;color:var(--text-strong)">"the apps"</h2>
-                    <a class="pl-app" href=fin_href() rel="external">
-                        <span class="pl-mark" aria-hidden="true"><FinGlyph/></span>
-                        <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">"fin"</b><span style="color:var(--text-secondary)">"a household money tracker. accounts, loans, subscriptions, and a family that shares them."</span></span>
-                        <span style="color:var(--text-secondary);font-size:var(--font-size-sm)">"fin.pebblelab.in"</span>
-                    </a>
+                    {APPS.iter().map(|a| view! {
+                        <a class="pl-app" href=a.url().unwrap_or_else(|| "/".into()) rel="external">
+                            <span class="pl-mark" aria-hidden="true"><Glyph app=a/></span>
+                            <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">{a.name}</b><span style="color:var(--text-secondary)">{a.blurb}</span></span>
+                            <span style="color:var(--text-secondary);font-size:var(--font-size-sm)">{a.host}</span>
+                        </a>
+                    }).collect_view()}
                     <div class="pl-app" aria-disabled="true">
                         <span class="pl-mark" aria-hidden="true" style="border-style:dashed"></span>
                         <span style="display:flex;flex-direction:column;gap:2px"><b style="font-weight:500">"more, later"</b><span>"each new app uses the same account. nothing to sign up for again."</span></span>
@@ -150,16 +142,16 @@ fn Landing() -> impl IntoView {
 #[component]
 fn SignIn() -> impl IntoView {
     let q = use_query_map();
-    let to = move || q.with(|q| q.get("to")).filter(|t| t == "fin");
+    let to = move || q.with(|q| q.get("to")).and_then(|t| apps::find(&t));
     let nav = use_navigate();
     let err = RwSignal::new(api::hash_params().remove("error"));
     let busy = RwSignal::new(false);
-    remember_to(to().as_deref());
+    remember_to(to().map(|a| a.id));
     if api::load_token().is_some() && err.get_untracked().is_none() {
-        if to().is_some() {
+        if let Some(a) = to() {
             busy.set(true);
             leptos::task::spawn_local(async move {
-                if let Err(e) = api::open_fin().await {
+                if let Err(e) = api::open_app(a.id).await {
                     // the session here is stale: sign in again
                     if e.unauthorized() {
                         api::clear_token();
@@ -172,6 +164,7 @@ fn SignIn() -> impl IntoView {
             nav("/account", Default::default());
         }
     }
+    let opening = move || format!("opening {}", to().map(|a| a.name).unwrap_or_default());
     view! {
         <SkipLink/>
         <div class="pl-page">
@@ -183,8 +176,8 @@ fn SignIn() -> impl IntoView {
                     <main id="main" tabindex="-1" class="d-status-page" data-kind="loading" style="min-height:calc(100vh - 33px)">
                         <div class="d-street" aria-hidden="true"><div class="d-street__world"><i></i><i></i><i></i></div></div>
                         <div class="d-status-page__inner">
-                            <Pebbles label="opening fin" large=true/>
-                            <h1 class="d-status-page__title">"opening fin"</h1>
+                            <Pebbles label=opening() large=true/>
+                            <h1 class="d-status-page__title">{opening()}</h1>
                         </div>
                         <div class="d-status-page__foot">"pebblelab"</div>
                     </main>
@@ -196,8 +189,8 @@ fn SignIn() -> impl IntoView {
                             <div class="d-card__body" style="padding:24px;display:flex;flex-direction:column;gap:16px">
                                 <div style="display:flex;flex-direction:column;gap:4px">
                                     <h1 class="heading-xl" style="margin:0;color:var(--text-strong)">"sign in"</h1>
-                                    {move || if to().is_some() {
-                                        view! { <p style="margin:0;color:var(--text-secondary)">"to continue to "<b style="color:var(--text-strong);font-weight:500">"fin"</b>"."</p> }.into_any()
+                                    {move || if let Some(a) = to() {
+                                        view! { <p style="margin:0;color:var(--text-secondary)">"to continue to "<b style="color:var(--text-strong);font-weight:500">{a.name}</b>"."</p> }.into_any()
                                     } else {
                                         view! { <p style="margin:0;color:var(--text-secondary)">"to your pebblelab account."</p> }.into_any()
                                     }}
@@ -228,8 +221,8 @@ fn Callback() -> impl IntoView {
         match api::post::<Session>("/auth/redeem", &serde_json::json!({ "code": code, "app": "account" })).await {
             Ok(s) => {
                 api::save_token(&s.token, true);
-                if to.as_deref() == Some("fin") {
-                    if let Err(e) = api::open_fin().await {
+                if let Some(a) = to.as_deref().and_then(apps::find) {
+                    if let Err(e) = api::open_app(a.id).await {
                         err.set(Some(e.message));
                     }
                 } else {
@@ -305,55 +298,17 @@ fn HubShell() -> impl IntoView {
     let page = Memo::new(move |_| path.get().trim_start_matches('/').split('/').next().unwrap_or("").to_string());
     let section = Memo::new(move |_| *SECTIONS.iter().find(|s| s.0 == page.get()).unwrap_or(&SECTIONS[0]));
 
-    let theme = use_theme();
-    let theme_name = RwSignal::new(theme.get_untracked().as_str().to_string());
-    Effect::new(move |_| {
-        let t = Theme::parse(&theme_name.get()).unwrap_or_default();
-        if theme.get_untracked() != t {
-            theme.set(t);
-        }
+    let members = move || app.me.with(|m| m.as_ref().and_then(|m| m.family.as_ref().map(|f| f.members.len())));
+    let tokens = LocalResource::new(move || {
+        app.rev.track();
+        async { api::get::<Vec<Connector>>("/connectors").await.map(|l| l.len()).unwrap_or(0) }
     });
-    Effect::new(move |_| theme_name.set(theme.get().as_str().to_string()));
-    let sign_out = move |()| {
-        leptos::task::spawn_local(async move {
-            let _ = api::post::<serde_json::Value>("/auth/signout", &serde_json::json!({})).await;
-            api::clear_token();
-            app.me.set(None);
-        });
-    };
-    let name = move || app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default());
-    let fin = fin_href();
 
     view! {
         <SkipLink/>
         <Shell state=shell height="100dvh">
             <Sidebar>
-                <SidebarHead>
-                    <Menu
-                        label="switch app or account" match_width=true
-                        trigger=move || view! {
-                            <button type="button" class="d-sidebar__tile" aria-label=move || format!("switch: account, {}", name())>
-                                <span class="d-sidebar__mark" aria-hidden="true"><svg viewBox="-3.4 5.6 40 40" width="24" height="24"><path d=MARK fill="var(--accent-primary)"></path></svg></span>
-                                <span class="d-sidebar__who"><b>"pebblelab account"</b><small>{name}</small></span>
-                                <Ico d=UP_DOWN/>
-                            </button>
-                        }
-                    >
-                        <MenuHead>
-                            <span class="d-avatar" aria-hidden="true"><Face picture=Signal::derive(move || app.me.with(|m| m.as_ref().and_then(|m| m.user.picture.clone())))/></span>
-                            <span class="d-menu__who"><b>{name}</b><small>{move || app.me.with(|m| m.as_ref().map(|m| m.user.email.clone()).unwrap_or_default())}</small></span>
-                        </MenuHead>
-                        <MenuLabel>"apps"</MenuLabel>
-                        <a class="d-menu__item" role="menuitem" tabindex="-1" href=fin rel="external"><Ico d=WALLET/>"fin"</a>
-                        <MenuSeparator/>
-                        <MenuRadioGroup label="theme" value=theme_name>
-                            <MenuRadio value="dark">"dark"</MenuRadio>
-                            <MenuRadio value="light">"light"</MenuRadio>
-                        </MenuRadioGroup>
-                        <MenuSeparator/>
-                        <MenuItem on_select=sign_out>"sign out"</MenuItem>
-                    </Menu>
-                </SidebarHead>
+                <SidebarHead><Switcher/></SidebarHead>
                 <SidebarContent>
                     <SidebarGroup label="you">
                         <SidebarItem href="/account" icon="layout-dashboard" label="home" current=Signal::derive(move || page.get() == "account")/>
@@ -361,8 +316,8 @@ fn HubShell() -> impl IntoView {
                         <HubItem href="/security" icon=LOCK label="security" current=Signal::derive(move || page.get() == "security")/>
                     </SidebarGroup>
                     <SidebarGroup label="shared with your apps">
-                        <HubItem href="/family" icon=USERS label="family" current=Signal::derive(move || page.get() == "family")/>
-                        <HubItem href="/connectors" icon=PLUG label="connectors" current=Signal::derive(move || page.get() == "connectors")/>
+                        <HubItem href="/family" icon=USERS label="family" current=Signal::derive(move || page.get() == "family") count=Signal::derive(members)/>
+                        <HubItem href="/connectors" icon=PLUG label="connectors" current=Signal::derive(move || page.get() == "connectors") count=Signal::derive(move || tokens.get().filter(|n| *n > 0))/>
                     </SidebarGroup>
                 </SidebarContent>
             </Sidebar>
@@ -392,13 +347,14 @@ fn HubShell() -> impl IntoView {
 
 /// A sidebar row for pages whose icon is not in the bundled set: the same markup as `SidebarItem`.
 #[component]
-fn HubItem(href: &'static str, icon: &'static str, label: &'static str, #[prop(into)] current: Signal<bool>) -> impl IntoView {
+fn HubItem(href: &'static str, icon: &'static str, label: &'static str, #[prop(into)] current: Signal<bool>, #[prop(optional, into)] count: Signal<Option<usize>>) -> impl IntoView {
     let shell = use_shell();
     view! {
         <li class="d-sidebar__item">
             <a class="d-sidebar__btn" href=href aria-current=move || current.get().then_some("page") data-tooltip=move || shell.icon_rail().then_some(label)>
                 <Ico d=icon/>
                 <span class="d-sidebar__label">{label}</span>
+                {move || count.get().map(|n| view! { <span class="d-badge d-badge--count">{n}</span> })}
             </a>
         </li>
     }
@@ -412,13 +368,15 @@ fn Home() -> impl IntoView {
     let family = move || app.me.with(|m| m.as_ref().and_then(|m| m.family.clone()));
     view! {
         <div class="pl-grid">
-            <a class="pl-app" href=fin_href() rel="external" style="grid-column:1 / -1">
-                <span class="pl-mark" aria-hidden="true"><FinGlyph/></span>
-                <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">"fin"</b><span style="color:var(--text-secondary)">"a household money tracker"</span></span>
-                <span class="d-btn d-btn--secondary">"open"</span>
-            </a>
+            {APPS.iter().map(|a| view! {
+                <a class="pl-app" href=a.url().unwrap_or_else(|| "/".into()) rel="external" style="grid-column:1 / -1">
+                    <span class="pl-mark" aria-hidden="true"><Glyph app=a/></span>
+                    <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">{a.name}</b><span style="color:var(--text-secondary)">{a.blurb}</span></span>
+                    <span class="d-btn d-btn--secondary">"open"</span>
+                </a>
+            }).collect_view()}
             <section class="d-card" aria-labelledby="h-fam">
-                <header class="d-card__head"><h2 class="d-card__title" id="h-fam">"household"</h2></header>
+                <header class="d-card__head"><h2 class="d-card__title" id="h-fam">"household"</h2><span class="d-card__meta">{move || app.household()}</span></header>
                 <div class="d-card__body"><div class="d-setrows">
                     <div class="d-setrow">
                         <span class="d-setrow__text">

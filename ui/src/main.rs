@@ -1,4 +1,5 @@
 mod api;
+mod apps;
 mod fmt;
 mod hub_art;
 mod icons;
@@ -16,6 +17,9 @@ fn main() {
     wasm_bindgen_futures::spawn_local(async {
         api::load_options().await;
         if api::is_hub() {
+            if let Some(d) = web_sys::window().and_then(|w| w.document()) {
+                d.set_title("pebblelab");
+            }
             leptos::mount::mount_to_body(pages::hub::HubApp);
         } else {
             leptos::mount::mount_to_body(App);
@@ -30,7 +34,7 @@ fn App() -> impl IntoView {
         <style>{include_str!("app.css")}</style>
         <DotsProvider persist_theme="pebblelab:theme">
             <Router>
-                <Routes fallback=|| view! { <StatusPage kind=StatusKind::NotFound title="you are lost" foot="pebblelab/fin"><a class="d-link" href="/">"click here to go home"</a></StatusPage> }>
+                <Routes fallback=|| view! { <StatusPage kind=StatusKind::NotFound title="you are lost" foot="pebblelab fin"><a class="d-link" href="/">"click here to go home"</a></StatusPage> }>
                     <Route path=path!("/") view=pages::Landing/>
                     <Route path=path!("/signin") view=pages::SignIn/>
                     <Route path=path!("/signup") view=pages::SignUp/>

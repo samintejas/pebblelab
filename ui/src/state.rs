@@ -16,7 +16,12 @@ pub enum Side {
 #[derive(Clone, Copy)]
 pub struct AppState {
     pub me: RwSignal<Option<Me>>,
+    /// Looking at just what you own, and not the family: chosen in the switcher, the same in every app.
+    pub solo: RwSignal<bool>,
+    /// The accounts in view: the family's, or only yours when looking at just you.
     pub accounts: RwSignal<Vec<Account>>,
+    /// Every account you can see, whatever is in view.
+    every: RwSignal<Vec<Account>>,
     pub tags: RwSignal<Vec<String>>,
     pub parties: RwSignal<Vec<String>>,
     pub notes: RwSignal<Vec<Notification>>,
@@ -32,7 +37,9 @@ impl AppState {
     pub fn new() -> Self {
         AppState {
             me: RwSignal::new(None),
+            solo: RwSignal::new(api::load_solo()),
             accounts: RwSignal::new(Vec::new()),
+            every: RwSignal::new(Vec::new()),
             tags: RwSignal::new(Vec::new()),
             parties: RwSignal::new(Vec::new()),
             notes: RwSignal::new(Vec::new()),
@@ -55,10 +62,11 @@ impl AppState {
         crate::fmt::signed(minor, &self.currency())
     }
 
-    /// Family members (just you when there is no family).
+    /// Family members (just you when there is no family, or when looking at just you).
     pub fn members(&self) -> Vec<Member> {
+        let solo = self.solo.get();
         self.me.with(|m| match m {
-            Some(me) => me.family.as_ref().map(|f| f.members.clone()).unwrap_or_else(|| vec![Member { id: me.user.id, name: me.user.name.clone(), initials: me.user.initials.clone(), email: me.user.email.clone() }]),
+            Some(me) => me.family.as_ref().filter(|_| !solo).map(|f| f.members.clone()).unwrap_or_else(|| vec![Member { id: me.user.id, name: me.user.name.clone(), initials: me.user.initials.clone(), email: me.user.email.clone() }]),
             None => vec![],
         })
     }
@@ -70,12 +78,35 @@ impl AppState {
 
     /// The family's name, or `personal`.
     pub fn root_name(&self) -> String {
-        self.me.with(|m| m.as_ref().and_then(|m| m.family.as_ref().map(|f| f.name.clone())).unwrap_or_else(|| "personal".into()))
+        let solo = self.solo.get();
+        self.me.with(|m| m.as_ref().and_then(|m| m.family.as_ref().filter(|_| !solo).map(|f| f.name.clone())).unwrap_or_else(|| "personal".into()))
     }
 
-    /// More than one person: columns and filters about people make sense.
+    /// More than one person in view: columns and filters about people make sense.
     pub fn has_family(&self) -> bool {
-        self.me.with(|m| m.as_ref().is_some_and(|m| m.family.as_ref().is_some_and(|f| f.members.len() > 1)))
+        !self.solo.get() && self.me.with(|m| m.as_ref().is_some_and(|m| m.family.as_ref().is_some_and(|f| f.members.len() > 1)))
+    }
+
+    /// What the switcher says is in view: the family's name, or `just you`.
+    pub fn household(&self) -> String {
+        let solo = self.solo.get();
+        self.me.with(|m| m.as_ref().and_then(|m| m.family.as_ref().filter(|_| !solo).map(|f| f.name.clone())).unwrap_or_else(|| "just you".into()))
+    }
+
+    /// Look at the family, or at just you. Every screen redraws, and the other apps follow.
+    pub fn set_solo(&self, solo: bool) {
+        if self.solo.get_untracked() != solo {
+            api::save_solo(solo);
+            self.solo.set(solo);
+            self.view_accounts();
+            self.bump();
+        }
+    }
+
+    /// Put the accounts in view: all of them, or only the ones you own.
+    fn view_accounts(&self) {
+        let (me, solo) = (self.my_id(), self.solo.get_untracked());
+        self.accounts.set(self.every.with_untracked(|a| a.iter().filter(|a| !solo || a.owners.iter().any(|o| o.id == me)).cloned().collect()));
     }
 
     pub fn my_id(&self) -> i64 {
@@ -127,7 +158,8 @@ impl AppState {
                 }
             }
             if let Ok(a) = api::accounts().await {
-                s.accounts.set(a);
+                s.every.set(a);
+                s.view_accounts();
             }
             if let Ok(t) = api::tags().await {
                 s.tags.set(t);

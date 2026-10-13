@@ -7,6 +7,7 @@ mod landing;
 mod settings;
 mod shell;
 mod subscriptions;
+mod switcher;
 mod transactions;
 
 pub use accounts::{AccountPage, Accounts, NewAccount};

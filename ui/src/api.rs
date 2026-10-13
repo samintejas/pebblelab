@@ -268,8 +268,8 @@ pub fn options() -> Options {
     OPTIONS.with(|c| c.borrow().clone())
 }
 
-/// Is this page the hub (pebblelab.in) and not an app? Decided by the address the page was opened at; a dev
-/// server can be told with `?app=hub` (remembered in this browser), `?app=fin` to forget it.
+/// Is this page the hub (pebblelab.in) and not an app? Decided by the address the page was opened at: the one
+/// the server names as the hub, or pebblelab.in. A dev server without one can be told with `?app=hub` (remembered in this browser), `?app=fin` to forget it.
 pub fn is_hub() -> bool {
     let Some(w) = web_sys::window() else { return false };
     let host = w.location().hostname().unwrap_or_default();
@@ -280,24 +280,64 @@ pub fn is_hub() -> bool {
         }
     }
     let forced = w.local_storage().ok().flatten().and_then(|s| s.get_item("pebblelab:app").ok().flatten()).as_deref() == Some("hub");
-    forced || host == "pebblelab.in" || host == "www.pebblelab.in" || host.starts_with("hub.")
+    // the server knows which address is the hub: this page is it when it was opened there
+    let origin = w.location().origin().unwrap_or_default();
+    let named = options().hub.is_some_and(|h| h.trim_end_matches('/') == origin);
+    forced || named || host == "pebblelab.in" || host == "www.pebblelab.in" || host.starts_with("hub.")
 }
 
 /// Where to send someone who needs to sign in, when the hub is in use: `{hub}/signin?to=fin`.
 pub fn hub_sign_in() -> Option<String> {
-    options().hub.map(|h| format!("{h}/signin?to=fin"))
+    options().hub.map(|h| format!("{h}/signin?to={}", crate::apps::here()))
 }
 
-/// Swap the signed-in person for a one-time code and open fin with it.
-pub async fn open_fin() -> Result<(), ApiError> {
+/// Swap the signed-in person for a one-time code and open an app with it.
+pub async fn open_app(id: &str) -> Result<(), ApiError> {
     #[derive(serde::Deserialize)]
     struct Code {
         code: String,
     }
-    let fin = options().fin.ok_or(ApiError { status: 0, message: "fin is not set up on this server".into() })?;
+    let app = crate::apps::find(id).ok_or(ApiError { status: 0, message: format!("there is no app called {id}") })?;
+    let url = app.url().ok_or(ApiError { status: 0, message: format!("{} is not set up on this server", app.name) })?;
     let c: Code = post("/auth/handoff", &serde_json::json!({})).await?;
     if let Some(w) = web_sys::window() {
-        let _ = w.location().set_href(&format!("{fin}/auth/callback#code={}", c.code));
+        let _ = w.location().set_href(&format!("{url}/auth/callback#code={}", c.code));
     }
     Ok(())
+}
+
+// ---- what follows you between apps --------------------------------------------------------------------
+
+const HOUSEHOLD: &str = "pebblelab_household";
+
+/// The address every pebblelab app here shares (`pebblelab.in` for `fin.pebblelab.in`), when this page is on it.
+fn shared_domain() -> Option<String> {
+    let host = web_sys::window()?.location().hostname().ok()?;
+    let hub = options().hub?;
+    let hub = hub.split("://").last()?.split(['/', ':']).next()?.trim_start_matches("www.").to_string();
+    (host == hub || host.ends_with(&format!(".{hub}"))).then_some(hub)
+}
+
+fn cookies() -> String {
+    let doc = web_sys::window().and_then(|w| w.document());
+    doc.and_then(|d| js_sys::Reflect::get(&d, &"cookie".into()).ok()).and_then(|v| v.as_string()).unwrap_or_default()
+}
+
+/// Looking at only what you own, and not the family? Off unless you chose it.
+pub fn load_solo() -> bool {
+    let cookie = cookies().split(';').find_map(|c| c.trim().strip_prefix(&format!("{HOUSEHOLD}=")).map(String::from));
+    cookie.or_else(|| storage(true).and_then(|s| s.get_item(HOUSEHOLD).ok().flatten())).as_deref() == Some("me")
+}
+
+/// Remember it: in a cookie on the address the apps share, so each of them follows, and in this browser.
+pub fn save_solo(solo: bool) {
+    let v = if solo { "me" } else { "family" };
+    if let Some(s) = storage(true) {
+        let _ = s.set_item(HOUSEHOLD, v);
+    }
+    if let (Some(domain), Some(doc)) = (shared_domain(), web_sys::window().and_then(|w| w.document())) {
+        let secure = if web_sys::window().and_then(|w| w.location().protocol().ok()).as_deref() == Some("https:") { "; Secure" } else { "" };
+        let cookie = format!("{HOUSEHOLD}={v}; Domain={domain}; Path=/; Max-Age=31536000; SameSite=Lax{secure}");
+        let _ = js_sys::Reflect::set(&doc, &"cookie".into(), &cookie.into());
+    }
 }

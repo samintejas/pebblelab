@@ -93,10 +93,11 @@ pub fn Transactions() -> impl IntoView {
     let base = Memo::new(move |_| TxFilter {
         q: Some(q.get()).filter(|s| !s.trim().is_empty()),
         kinds: join(&kinds.get()),
-        accounts: join(&accts.get()),
+        // looking at just you: only the accounts you own, unless some are picked
+        accounts: join(&accts.get()).or_else(|| app.solo.get().then(|| app.accounts.with(|l| l.iter().map(|a| a.id.to_string()).collect::<Vec<_>>().join(","))).filter(|s| !s.is_empty())),
         tags: join(&tag_sel.get()),
         parties: join(&party_sel.get()),
-        member_id: people.get().first().and_then(|p| p.parse().ok()),
+        member_id: people.get().first().and_then(|p| p.parse().ok()).filter(|_: &i64| app.has_family()),
         from: Some(from.get()).filter(|s| !s.is_empty()),
         to: Some(to.get()).filter(|s| !s.is_empty()),
         collapse_transfers: Some(true),

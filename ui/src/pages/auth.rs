@@ -62,7 +62,7 @@ fn Leaving() -> impl IntoView {
                 <Pebbles label="taking you to pebblelab" large=true/>
                 <h1 class="d-status-page__title">"taking you to pebblelab"</h1>
             </div>
-            <div class="d-status-page__foot">"pebblelab/fin"</div>
+            <div class="d-status-page__foot">"pebblelab fin"</div>
         </main>
     }
 }

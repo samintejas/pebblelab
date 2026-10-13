@@ -14,7 +14,8 @@ pub fn Insights() -> impl IntoView {
     // "all", or a member id
     let scope = RwSignal::new("all".to_string());
     let data = LocalResource::new(move || {
-        let member = scope.get().parse::<i64>().ok();
+        // looking at just you is your own view of it, whatever was picked for the family
+        let member = if app.solo.get() { Some(app.my_id()) } else { scope.get().parse::<i64>().ok() };
         app.rev.track();
         async move { api::insights(member).await }
     });

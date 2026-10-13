@@ -17,16 +17,19 @@ use pebblelab_core::{Config, Store};
 
 #[tokio::main]
 async fn main() {
-    // `pebblelab tx list | head` should end quietly when the reader goes away, not panic on a broken pipe
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
-    }
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "pebblelab=info,tower_http=info".into()))
         .init();
     let cli = Cli::parse();
+    // `pebblelab tx list | head` should end quietly when the reader goes away, not panic on a broken pipe.
+    // Not the server: there a broken pipe is a browser that stopped listening, and must not end the process.
+    #[cfg(unix)]
+    if !matches!(cli.cmd, Cmd::Serve { .. }) {
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
+    }
     if let Err(e) = real_main(cli).await {
         eprintln!("error: {e}");
         std::process::exit(1);

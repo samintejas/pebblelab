@@ -10,7 +10,7 @@ use crate::state::AppState;
 
 const TABS: [(&str, &str, &str, &str); 5] = [
     ("profile", "profile", USER, "your name, picture and how to reach you."),
-    ("prefs", "preferences", SLIDERS, "how pebblelab/fin looks and what it tells you about."),
+    ("prefs", "preferences", SLIDERS, "how fin looks and what it tells you about."),
     ("security", "security", LOCK, "how you sign in, sessions and deleting your account."),
     ("family", "family", USERS, "optional. share accounts and hold joint ones."),
     ("connectors", "connectors", PLUG, "give claude code, chatgpt or any mcp client its own token, with its own permissions."),
@@ -44,6 +44,20 @@ pub fn Settings() -> impl IntoView {
         TABS.iter().find(|x| x.0 == t).map(|x| x.0).unwrap_or("profile")
     });
     let def = move || *TABS.iter().find(|x| x.0 == tab.get()).unwrap_or(&TABS[0]);
+    // with the account hub in use, who you are, your family and your tokens live there: what is left is fin's own
+    if api::options().hub.is_some() {
+        return view! {
+            <div class="set" style="grid-template-columns:minmax(0,1fr)">
+                <div class="set__panel" aria-label="settings">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                        <h1 class="heading-lg" style="color:var(--text-strong)">"settings"</h1>
+                        <span style="color:var(--text-secondary)">{TABS[1].3}</span>
+                    </div>
+                    <Prefs/>
+                </div>
+            </div>
+        }.into_any();
+    }
     view! {
         <div class="set">
             <nav class="d-secnav" aria-label="settings">
@@ -66,7 +80,7 @@ pub fn Settings() -> impl IntoView {
                 }}
             </div>
         </div>
-    }
+    }.into_any()
 }
 
 /// Save part of the profile and refresh what the rest of the app knows.
@@ -222,6 +236,18 @@ fn Prefs() -> impl IntoView {
                     {move || app.has_family().then(|| switch("transactions on joint accounts", "notify_joint", |u| u.notify_joint))}
                 </div>
             </section>
+            {api::options().hub.map(|hub| view! {
+                <section class="d-card" aria-labelledby="ac-t">
+                    <header class="d-card__head"><h2 class="d-card__title" id="ac-t">"in your pebblelab account"</h2></header>
+                    <div class="d-card__body">
+                        {[("profile and sign-in", "name, picture, google and github, where you are signed in", "profile"),
+                          ("family", "who shares accounts with you", "family"),
+                          ("connectors", "tokens for claude and other mcp clients", "connectors")].map(|(title, text, page)| view! {
+                            <div class="d-setrow"><span class="d-setrow__text"><b>{title}</b><small>{text}</small></span><a class="d-btn d-btn--secondary" rel="external" href=format!("{hub}/{page}")>"open"</a></div>
+                        }).collect_view()}
+                    </div>
+                </section>
+            })}
             <section class="d-card" aria-labelledby="dx-t">
                 <header class="d-card__head"><h2 class="d-card__title" id="dx-t">"your data"</h2></header>
                 <div class="d-card__body">

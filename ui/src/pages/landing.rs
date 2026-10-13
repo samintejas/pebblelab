@@ -4,6 +4,7 @@ use leptos_router::hooks::use_navigate;
 
 use crate::api;
 use crate::icons::*;
+use crate::pages::hub::Wordmark;
 
 const HEAT: [f32; 28] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.29, 0.0, 0.34, 0.28, 0.27, 0.0, 0.75, 0.31, 0.34, 0.81, 0.0, 0.31, 0.35, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
@@ -43,8 +44,7 @@ pub fn Landing() -> impl IntoView {
         <div style="background:var(--bg-base);color:var(--text-primary);min-height:100dvh">
             <SkipLink/>
             <header class="d-appbar">
-                <span style="margin-left:4px;display:flex"><Mark/></span>
-                <span class="d-appbar__title">"pebblelab/fin"</span>
+                <span style="margin-left:4px;display:flex;align-items:center;gap:8px;flex:none"><Wordmark/><span class="d-appbar__title" style="color:var(--text-secondary)">"fin"</span></span>
                 <span class="d-appbar__sep" aria-hidden="true"></span>
                 <nav class="d-appbar__nav" aria-label="main">
                     <a class="d-appbar__link" href="#views" rel="external">"views"</a>
@@ -176,7 +176,7 @@ pub fn Landing() -> impl IntoView {
             </main>
             <footer style="border-top:1px solid var(--border-default)">
                 <div class="d-container d-row" style="padding-block:16px;justify-content:space-between;font-size:var(--font-size-sm);color:var(--text-secondary)">
-                    <span>"pebblelab/fin"</span>
+                    <span>"pebblelab fin"</span>
                     <span>"a pebblelab.in app"</span>
                 </div>
             </footer>
