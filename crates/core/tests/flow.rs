@@ -194,10 +194,13 @@ async fn loans_dues_and_ask() {
     assert_eq!(ins.months.len(), 6);
     assert_eq!(ins.months.last().unwrap().spending, 500_00);
     assert!((28..=31).contains(&ins.days.len()));
-    // the card is due on the 18th: a reminder appears only within three days of it
+    // the card is due on the 18th: a reminder appears only within three days of it. Reminders are made by the
+    // background jobs, not by reading
+    s.run_jobs().await.unwrap();
     let notes = s.notifications(&c).await.unwrap();
     let due_soon = (chrono::NaiveDate::parse_from_str(&ins.dues.iter().find(|d| d.account_id == card.id).unwrap().date, "%Y-%m-%d").unwrap() - now).num_days() <= 3;
     assert_eq!(notes.iter().any(|n| n.title.starts_with("card payment due")), due_soon);
+    s.run_jobs().await.unwrap();
     assert_eq!(s.notifications(&c).await.unwrap().len(), notes.len(), "a reminder is made once");
 
     let a = s.ask(&c, "when do my loans end?").await.unwrap();
