@@ -85,8 +85,8 @@ Once, before the first deploy:
 - add the repository secrets `VPS_HOST`, `VPS_USER` (the service's user), `VPS_SSH_KEY` (a key made for the
   deploy, its public half in that user's `~/.ssh/authorized_keys`), `VPS_KNOWN_HOSTS`
   (`ssh-keyscan -t ed25519 <host>`) and, if ssh is not on 22, `VPS_PORT`;
-- let the deploy restart the service: `sudo install -m 440 deploy/pebblelab.sudoers /etc/sudoers.d/pebblelab`
-  (`root-setup.sh` does this too). It allows `systemctl restart pebblelab` and nothing else.
+- let the deploy restart the service without a password, and nothing else:
+  `echo 'samin ALL=(root) NOPASSWD: /usr/bin/systemctl restart pebblelab' | sudo EDITOR='tee' visudo -f /etc/sudoers.d/pebblelab`
 
 The `production` environment the job runs in can be given required reviewers under Settings > Environments.
 

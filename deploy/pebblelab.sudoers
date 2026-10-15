@@ -1,2 +1,0 @@
-# lets the deploy (signed in as samin) restart the app, and nothing else
-samin ALL=(root) NOPASSWD: /usr/bin/systemctl restart pebblelab

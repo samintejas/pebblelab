@@ -6,7 +6,7 @@
 #   VPS_SSH_KEY      a private key whose public half is in that user's ~/.ssh/authorized_keys
 #   VPS_KNOWN_HOSTS  the server's host key line: ssh-keyscan -t ed25519 <host>
 #   VPS_PORT         optional, default 22
-# and on the server, the sudo rule from deploy/pebblelab.sudoers (root-setup.sh installs it).
+# and on the server, a sudo rule letting that user run `systemctl restart pebblelab` (see the README).
 name: ci
 
 on:
