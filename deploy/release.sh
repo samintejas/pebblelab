@@ -61,7 +61,13 @@ healthy() {
 }
 
 swap_in "$rel"
-sudo -n /usr/bin/systemctl restart pebblelab
+if ! sudo -n /usr/bin/systemctl restart pebblelab; then
+  # the old build is still the one running: put its files back so the next deploy of this revision is not "already live"
+  echo "error: could not restart pebblelab; the deploy user needs the sudoers rule in the README" >&2
+  if [ -n "$prev" ] && [ -d "$prev" ]; then swap_in "$prev"; else rm -f "$app/current"; fi
+  rm -rf "$rel"
+  exit 1
+fi
 if healthy; then
   echo "pebblelab $rev is up"
   # keep the last five releases
