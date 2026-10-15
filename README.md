@@ -92,7 +92,7 @@ The repository is public, so the deploy gives away as little as it can:
 
 Once, before the first deploy:
 1. On your computer, make a key for the deploy only: `ssh-keygen -t ed25519 -N '' -C pebblelab-deploy -f pebblelab-deploy`.
-2. On the server, as samin:
+2. Copy `pebblelab-deploy.pub` to the server, then as samin:
    ```sh
    install -m 755 deploy/release.sh ~/apps/pebblelab/release.sh      # from a checkout, or copy it over
    echo "restrict,command=\"$HOME/apps/pebblelab/release.sh\" $(cat pebblelab-deploy.pub)" >> ~/.ssh/authorized_keys
