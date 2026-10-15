@@ -10,8 +10,9 @@ use pebblelab_api::*;
 
 use super::settings::{Connectors, FamilyTab, ProfileTab};
 use crate::api;
-use crate::hub_art::{FIN, MARK, WORDMARK};
+use crate::hub_art::{FIN, MARK, Wordmark};
 use crate::icons::*;
+use crate::pages::switcher::{Here, Switcher};
 use crate::state::AppState;
 
 const TO_KEY: &str = "pebblelab:to";
@@ -53,14 +54,6 @@ pub fn HubApp() -> impl IntoView {
                 </Routes>
             </Router>
         </DotsProvider>
-    }
-}
-
-#[component]
-fn Wordmark(#[prop(default = 115)] width: u32, #[prop(default = "var(--text-strong)")] fill: &'static str) -> impl IntoView {
-    let height = width * 14 / 89;
-    view! {
-        <svg viewBox="0 3.2 238.1 37.4" width=width height=height role="img" aria-label="pebblelab" style="display:block;flex:none"><path d=WORDMARK fill=fill></path></svg>
     }
 }
 
@@ -110,7 +103,7 @@ fn Landing() -> impl IntoView {
                     <div class="d-container" style="padding-block:96px 72px;display:flex;flex-wrap:wrap;gap:48px;align-items:center;justify-content:space-between">
                         <div style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:20px;max-width:600px">
                             <h1 class="heading-3xl" style="margin:0;color:var(--text-max);max-width:18ch">"small, simple apps. one account."</h1>
-                            <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-md);max-width:52ch">"sign in once with google or github. every pebblelab app then knows who you are, who your family is, and which ai clients you let in. there is no password to make or forget."</p>
+                            <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-lg);max-width:52ch">"sign in once with google or github. every pebblelab app then knows who you are, who your family is, and which ai clients you let in. there is no password to make or forget."</p>
                             <div style="display:flex;flex-direction:column;gap:8px;max-width:340px">
                                 <ProviderButtons/>
                                 <span style="color:var(--text-secondary);font-size:var(--font-size-xs)">"new here? the same buttons make your account."</span>
@@ -128,6 +121,9 @@ fn Landing() -> impl IntoView {
                         <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">"fin"</b><span style="color:var(--text-secondary)">"a household money tracker. accounts, loans, subscriptions, and a family that shares them."</span></span>
                         <span style="color:var(--text-secondary);font-size:var(--font-size-sm)">"fin.pebblelab.in"</span>
                     </a>
+                    <Soon d=BOX name="shelf" text="a home inventory. what you have, where it is, what is running low. yours, or the household's."/>
+                    <Soon d=CLOCK name="hours" text="time, in blocks. a short list, focus, and chores that take turns."/>
+                    <Soon d=PLATE name="plate" text="what you eat, against your own targets. a meal plan for the household."/>
                     <div class="pl-app" aria-disabled="true">
                         <span class="pl-mark" aria-hidden="true" style="border-style:dashed"></span>
                         <span style="display:flex;flex-direction:column;gap:2px"><b style="font-weight:500">"more, later"</b><span>"each new app uses the same account. nothing to sign up for again."</span></span>
@@ -141,6 +137,18 @@ fn Landing() -> impl IntoView {
                     <span>"pebblelab.in"</span>
                 </div>
             </footer>
+        </div>
+    }
+}
+
+/// An app that is drawn but not open yet: its glyph, what it is for, and `soon`.
+#[component]
+fn Soon(d: &'static str, name: &'static str, text: &'static str) -> impl IntoView {
+    view! {
+        <div class="pl-app" aria-disabled="true">
+            <span class="pl-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d=d></path></svg></span>
+            <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="font-weight:500">{name}</b><span>{text}</span></span>
+            <span style="font-size:var(--font-size-sm)">"soon"</span>
         </div>
     }
 }
@@ -288,7 +296,11 @@ fn HubShell() -> impl IntoView {
         leptos::task::spawn_local(async move {
             match api::me().await {
                 Ok(m) => s.me.set(Some(m)),
-                Err(e) => s.fail(&e),
+                Err(e) => return s.fail(&e),
+            }
+            // fin's card on home counts them
+            if let Ok(a) = api::accounts().await {
+                s.accounts.set(a);
             }
         });
     }
@@ -305,55 +317,18 @@ fn HubShell() -> impl IntoView {
     let page = Memo::new(move |_| path.get().trim_start_matches('/').split('/').next().unwrap_or("").to_string());
     let section = Memo::new(move |_| *SECTIONS.iter().find(|s| s.0 == page.get()).unwrap_or(&SECTIONS[0]));
 
-    let theme = use_theme();
-    let theme_name = RwSignal::new(theme.get_untracked().as_str().to_string());
-    Effect::new(move |_| {
-        let t = Theme::parse(&theme_name.get()).unwrap_or_default();
-        if theme.get_untracked() != t {
-            theme.set(t);
-        }
-    });
-    Effect::new(move |_| theme_name.set(theme.get().as_str().to_string()));
-    let sign_out = move |()| {
+    let sign_out = Callback::new(move |()| {
         leptos::task::spawn_local(async move {
             let _ = api::post::<serde_json::Value>("/auth/signout", &serde_json::json!({})).await;
             api::clear_token();
             app.me.set(None);
         });
-    };
-    let name = move || app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default());
-    let fin = fin_href();
-
+    });
     view! {
         <SkipLink/>
         <Shell state=shell height="100dvh">
             <Sidebar>
-                <SidebarHead>
-                    <Menu
-                        label="switch app or account" match_width=true
-                        trigger=move || view! {
-                            <button type="button" class="d-sidebar__tile" aria-label=move || format!("switch: account, {}", name())>
-                                <span class="d-sidebar__mark" aria-hidden="true"><svg viewBox="-3.4 5.6 40 40" width="24" height="24"><path d=MARK fill="var(--accent-primary)"></path></svg></span>
-                                <span class="d-sidebar__who"><b>"pebblelab account"</b><small>{name}</small></span>
-                                <Ico d=UP_DOWN/>
-                            </button>
-                        }
-                    >
-                        <MenuHead>
-                            <span class="d-avatar" aria-hidden="true"><Face picture=Signal::derive(move || app.me.with(|m| m.as_ref().and_then(|m| m.user.picture.clone())))/></span>
-                            <span class="d-menu__who"><b>{name}</b><small>{move || app.me.with(|m| m.as_ref().map(|m| m.user.email.clone()).unwrap_or_default())}</small></span>
-                        </MenuHead>
-                        <MenuLabel>"apps"</MenuLabel>
-                        <a class="d-menu__item" role="menuitem" tabindex="-1" href=fin rel="external"><Ico d=WALLET/>"fin"</a>
-                        <MenuSeparator/>
-                        <MenuRadioGroup label="theme" value=theme_name>
-                            <MenuRadio value="dark">"dark"</MenuRadio>
-                            <MenuRadio value="light">"light"</MenuRadio>
-                        </MenuRadioGroup>
-                        <MenuSeparator/>
-                        <MenuItem on_select=sign_out>"sign out"</MenuItem>
-                    </Menu>
-                </SidebarHead>
+                <SidebarHead><Switcher here=Here::Account on_sign_out=sign_out/></SidebarHead>
                 <SidebarContent>
                     <SidebarGroup label="you">
                         <SidebarItem href="/account" icon="layout-dashboard" label="home" current=Signal::derive(move || page.get() == "account")/>
@@ -414,11 +389,11 @@ fn Home() -> impl IntoView {
         <div class="pl-grid">
             <a class="pl-app" href=fin_href() rel="external" style="grid-column:1 / -1">
                 <span class="pl-mark" aria-hidden="true"><FinGlyph/></span>
-                <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">"fin"</b><span style="color:var(--text-secondary)">"a household money tracker"</span></span>
+                <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">"fin"</b><span style="color:var(--text-secondary)">{move || { let n = app.accounts.with(|a| a.iter().filter(|a| !a.archived).count()); if n == 0 { "a household money tracker".to_string() } else if n == 1 { "1 account".to_string() } else { format!("{n} accounts") } }}</span></span>
                 <span class="d-btn d-btn--secondary">"open"</span>
             </a>
             <section class="d-card" aria-labelledby="h-fam">
-                <header class="d-card__head"><h2 class="d-card__title" id="h-fam">"household"</h2></header>
+                <header class="d-card__head"><h2 class="d-card__title" id="h-fam">"household"</h2><span class="d-card__meta">{move || family().map(|f| f.name).unwrap_or_else(|| "just you".into())}</span></header>
                 <div class="d-card__body"><div class="d-setrows">
                     <div class="d-setrow">
                         <span class="d-setrow__text">
@@ -618,19 +593,21 @@ fn Security() -> impl IntoView {
             <section class="d-card" aria-labelledby="sc-d">
                 <header class="d-card__head"><h2 class="d-card__title" id="sc-d">"delete your account"</h2></header>
                 <div class="d-card__body" style="display:flex;flex-direction:column;gap:12px">
-                    <p style="margin:0">"removes your sign-in, your data in every app, and your place in the family. joint accounts stay with the other owners."</p>
-                    <div><button type="button" class="d-btn d-btn--danger" on:click=move |_| confirm.set(true)>"delete account"</button></div>
+                    <p style="margin:0">"removes your sign-in, your data in every app, and your place in the family. joint accounts stay with the other owners. it cannot be undone."</p>
+                    {move || if confirm.get() {
+                        view! {
+                            <TextField label="type your email to confirm" value=del_text error=del_err placeholder=email()/>
+                            <div class="d-row" style="gap:8px">
+                                <Button variant=ButtonVariant::Secondary on:click=move |_| { confirm.set(false); del_text.set(String::new()); del_err.set(None); }>"cancel"</Button>
+                                <Button variant=ButtonVariant::Danger disabled=locked attr:aria-describedby="del-why" on:click=delete><Ico d=TRASH/>"delete my account"</Button>
+                            </div>
+                            {move || locked.get().then(|| view! { <Reason id="del-why">"type your email above to unlock this."</Reason> })}
+                        }.into_any()
+                    } else {
+                        view! { <div><button type="button" class="d-btn d-btn--danger" on:click=move |_| confirm.set(true)><Ico d=TRASH/>"delete account"</button></div> }.into_any()
+                    }}
                 </div>
             </section>
         </div>
-        <Dialog open=confirm title="delete your account" dismiss=false footer=move || view! {
-            <Button on:click=move |_| confirm.set(false)>"cancel"</Button>
-            <Button variant=ButtonVariant::Danger disabled=locked on:click=delete>"delete my account"</Button>
-        }>
-            <div class="d-stack" style="gap:var(--space-12)">
-                <p>"this removes your sign-in, the accounts only you own, and their transactions. it cannot be undone."</p>
-                <TextField label="type your email to confirm" value=del_text error=del_err/>
-            </div>
-        </Dialog>
     }
 }

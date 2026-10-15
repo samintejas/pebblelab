@@ -4,3 +4,25 @@ pub const WORDMARK: &str = "M2.52 11.24H9.2V18.48L8.92 19.36V24.84L9.2 26.48V40.
 pub const MARK: &str = "M2.52 11.24H9.2V18.48L8.92 19.36V24.84L9.2 26.48V40.6H2.52ZM6.88 22.64Q7.56 19 9.26 16.3Q10.96 13.6 13.54 12.12Q16.12 10.64 19.28 10.64Q22.64 10.64 25.18 12.14Q27.72 13.64 29.16 16.34Q30.6 19.04 30.6 22.64Q30.6 26.2 29.16 28.9Q27.72 31.6 25.18 33.1Q22.64 34.6 19.28 34.6Q16.08 34.6 13.54 33.12Q11 31.64 9.28 28.94Q7.56 26.24 6.88 22.64ZM23.84 22.64Q23.84 20.64 23.02 19.1Q22.2 17.56 20.76 16.7Q19.32 15.84 17.44 15.84Q15.56 15.84 13.88 16.7Q12.2 17.56 10.94 19.1Q9.68 20.64 8.96 22.64Q9.68 24.64 10.94 26.16Q12.2 27.68 13.88 28.54Q15.56 29.4 17.44 29.4Q19.32 29.4 20.76 28.54Q22.2 27.68 23.02 26.16Q23.84 24.64 23.84 22.64Z";
 /// The first path of fin's glyph (a wallet); the second is `M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4`.
 pub const FIN: &str = "M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1";
+
+use leptos::prelude::*;
+
+/// The pebblelab wordmark, 89:14.
+#[component]
+pub fn Wordmark(#[prop(default = 115)] width: u32, #[prop(default = "var(--text-strong)")] fill: &'static str) -> impl IntoView {
+    let height = width * 14 / 89;
+    view! {
+        <svg viewBox="0 3.2 238.1 37.4" width=width height=height role="img" aria-label="pebblelab" style="display:block;flex:none"><path d=WORDMARK fill=fill></path></svg>
+    }
+}
+
+/// Fin's name next to the wordmark, as the app bar and footer draw it.
+#[component]
+pub fn FinBrand(#[prop(optional)] small: bool) -> impl IntoView {
+    view! {
+        <span style="margin-left:4px;display:flex;align-items:center;gap:8px;flex:none">
+            <Wordmark width=if small { 89 } else { 115 } fill=if small { "var(--text-secondary)" } else { "var(--text-strong)" }/>
+            {if small { view! { <span>"fin"</span> }.into_any() } else { view! { <span class="d-appbar__title" style="color:var(--text-secondary)">"fin"</span> }.into_any() }}
+        </span>
+    }
+}

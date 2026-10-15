@@ -858,7 +858,7 @@ pub fn NewAccount() -> impl IntoView {
                         <section class="d-card" aria-labelledby="rv-t" style="max-width:640px">
                             <header class="d-card__head"><h2 class="d-card__title" id="rv-t">{move || form.name.get().trim().to_lowercase()}</h2><span class="d-card__meta">{setup_title(&k)}</span></header>
                             <div class="d-card__body d-card__body--flush"><SummaryList rows=review/></div>
-                            <div class="d-card__body" style="border-top:1px solid var(--border-default);color:var(--text-secondary)">{Form::note(&k)}</div>
+                            <div class="d-card__body" style="border-top:1px solid var(--border-subtle);color:var(--text-secondary)">{Form::note(&k)}</div>
                         </section>
                     }.into_any()
                 }
@@ -1001,7 +1001,7 @@ fn AccountView(a: Account, saved: RwSignal<bool>) -> impl IntoView {
                         <span style="color:var(--text-secondary)">{bal_label}</span>
                         <span class="heading-3xl" style="color:var(--text-strong)">{balance}</span>
                     </div>
-                    <div class="d-card__body d-card__body--flush" style="border-top:1px solid var(--border-default)"><SummaryList rows=summary/></div>
+                    <div class="d-card__body d-card__body--flush" style="border-top:1px solid var(--border-subtle)"><SummaryList rows=summary/></div>
                 </section>
                 <form class="d-card" aria-labelledby="ap-d" on:submit=move |e| { e.prevent_default(); save() } on:input=move |_| saved.set(false) style="flex:3 1 420px">
                     <header class="d-card__head"><h2 class="d-card__title" id="ap-d">"details"</h2><span class="d-card__meta" role="status">{move || if saved.get() { "saved" } else { "" }}</span></header>
@@ -1032,7 +1032,7 @@ fn AccountView(a: Account, saved: RwSignal<bool>) -> impl IntoView {
                             </footer>
                         }.into_any()
                     } else {
-                        view! { <div class="d-card__body" style="border-top:1px solid var(--border-default);color:var(--text-secondary)">"shared with you. only its owner can change it."</div> }.into_any()
+                        view! { <div class="d-card__body" style="border-top:1px solid var(--border-subtle);color:var(--text-secondary)">"shared with you. only its owner can change it."</div> }.into_any()
                     }}
                 </form>
             </div>

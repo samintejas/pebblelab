@@ -6,6 +6,7 @@ use leptos_router::hooks::{use_location, use_navigate};
 use crate::api;
 use crate::icons::*;
 use crate::pages::transactions::TxPanel;
+use crate::pages::switcher::{Here, Switcher};
 use crate::pages::{AssetPanel, SubPanel};
 use crate::state::{AppState, Side};
 
@@ -81,41 +82,20 @@ pub fn AppShell() -> impl IntoView {
         }
     };
 
-    let theme = use_theme();
-    let theme_name = RwSignal::new(theme.get_untracked().as_str().to_string());
-    Effect::new(move |_| {
-        let t = Theme::parse(&theme_name.get()).unwrap_or_default();
-        if theme.get_untracked() != t {
-            theme.set(t);
-        }
-    });
-    Effect::new(move |_| theme_name.set(theme.get().as_str().to_string()));
-
-    let sign_out = move |()| {
+    let sign_out = Callback::new(move |()| {
         leptos::task::spawn_local(async move {
             let _ = api::post::<serde_json::Value>("/auth/signout", &serde_json::json!({})).await;
             api::clear_token();
             app.me.set(None);
         });
-    };
-    let tile_name = move || app.me.with(|m| match m {
-        Some(m) => m.family.as_ref().map(|f| f.name.clone()).unwrap_or_else(|| m.user.name.clone()),
-        None => String::new(),
     });
-    let picture = Signal::derive(move || app.me.with(|m| m.as_ref().and_then(|m| m.user.picture.clone())));
     let acct_count = move || app.accounts.with(|a| a.iter().filter(|a| !a.archived).count());
-    let go_tx = { let nav = nav.clone(); move |_| nav("/transactions", Default::default()) };
 
     view! {
         <SkipLink/>
         <Shell state=shell height="100dvh">
             <Sidebar>
-                <SidebarHead>
-                    <button type="button" class="d-sidebar__tile" aria-label="pebblelab/fin, go to transactions" on:click=go_tx>
-                        <Mark/>
-                        <span class="d-sidebar__who"><b>"pebblelab/fin"</b><small>{tile_name}</small></span>
-                    </button>
-                </SidebarHead>
+                <SidebarHead><Switcher here=Here::Fin on_sign_out=sign_out/></SidebarHead>
                 <SidebarContent>
                     <SidebarGroup label="money">
                         <SidebarItem href="/transactions" icon="arrow-left-right" label="transactions" current=Signal::derive(move || page.get() == "transactions")/>
@@ -128,29 +108,9 @@ pub fn AppShell() -> impl IntoView {
                     </SidebarGroup>
                 </SidebarContent>
                 <SidebarFoot>
-                    <Menu
-                        label="account" match_width=true
-                        trigger=move || view! {
-                            <button type="button" class="d-sidebar__tile" aria-label=move || format!("account: {}", app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default()))>
-                                <span class="d-avatar" aria-hidden="true"><Face picture=picture/></span>
-                                <span class="d-sidebar__who">
-                                    <b>{move || app.me.with(|m| m.as_ref().map(|m| m.user.name.clone()).unwrap_or_default())}</b>
-                                    <small>{move || app.me.with(|m| m.as_ref().map(|m| m.user.email.clone()).unwrap_or_default())}</small>
-                                </span>
-                                <Ico d=UP_DOWN/>
-                            </button>
-                        }
-                    >
-                        <MenuLink href="/settings">"settings"</MenuLink>
-                        <MenuLink href="/settings/family">"family"</MenuLink>
-                        <MenuSeparator/>
-                        <MenuRadioGroup label="theme" value=theme_name>
-                            <MenuRadio value="dark">"dark"</MenuRadio>
-                            <MenuRadio value="light">"light"</MenuRadio>
-                        </MenuRadioGroup>
-                        <MenuSeparator/>
-                        <MenuItem on_select=sign_out>"sign out"</MenuItem>
-                    </Menu>
+                    <ul class="d-sidebar__menu">
+                        <TrackItem href="/settings" icon=SLIDERS label="settings" current=Signal::derive(move || page.get() == "settings")/>
+                    </ul>
                 </SidebarFoot>
             </Sidebar>
             <ShellMain>
@@ -248,7 +208,7 @@ fn Notifications() -> impl IntoView {
                         {move || {
                             let list = app.notes.get();
                             if list.is_empty() {
-                                return view! { <div style="padding:12px 16px;border-top:1px solid var(--border-default);color:var(--text-secondary)">"nothing yet. card due dates, emis and family activity show up here."</div> }.into_any();
+                                return view! { <div style="padding:12px 16px;border-top:1px solid var(--border-subtle);color:var(--text-secondary)">"nothing yet. card due dates, emis and family activity show up here."</div> }.into_any();
                             }
                             view! { <ul class="d-feed" aria-label="notifications">{list.into_iter().map(|n| {
                                 let nav = nav.clone();
@@ -270,7 +230,7 @@ fn Notifications() -> impl IntoView {
                             }).collect_view()}</ul> }.into_any()
                         }}
                         </div>
-                        <div class="d-row" style="justify-content:flex-end;flex-wrap:nowrap;padding:8px 8px 8px 16px;border-top:1px solid var(--border-default)">
+                        <div class="d-row" style="justify-content:flex-end;flex-wrap:nowrap;padding:8px 8px 8px 16px;border-top:1px solid var(--border-subtle)">
                             <button type="button" class="d-btn d-btn--ghost d-btn--sm" on:click=move |_| { open.set(false); nav2("/settings/prefs", Default::default()); }>"notification settings"</button>
                         </div>
                     </section>

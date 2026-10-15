@@ -247,7 +247,7 @@ pub fn Transactions() -> impl IntoView {
                                 }.into_any()
                             }
                         }}
-                        <div class="d-row" style="flex:none;margin-top:auto;justify-content:space-between;gap:12px;padding:12px 0;background:var(--bg-base);border-top:1px solid var(--border-default)">
+                        <div class="d-row" style="flex:none;margin-top:auto;justify-content:space-between;gap:12px;padding:12px 0;background:var(--bg-base);border-top:1px solid var(--border-subtle)">
                             <span style="color:var(--text-secondary)">{move || {
                                 let (t, s, p) = (total.get(), page_size.get(), page.get());
                                 if t == 0 { String::new() } else { format!("{}–{} of {}", (p - 1) * s + 1, (p * s).min(t), t) }
@@ -786,7 +786,7 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
                 </div>
                 {move || err.get().map(|m| view! { <span class="d-error" role="alert">{format!("error: {m}")}</span> })}
             </div>
-            <footer class="d-row" style="flex:none;justify-content:space-between;flex-wrap:nowrap;gap:8px;padding:12px 16px;border-top:1px solid var(--border-default)">
+            <footer class="d-row" style="flex:none;justify-content:space-between;flex-wrap:nowrap;gap:8px;padding:12px 16px;border-top:1px solid var(--border-subtle)">
                 <button type="button" class="d-btn d-btn--danger d-btn--icon" aria-label="delete transaction" title="delete transaction" on:click=move |_| confirm.set(true)><Ico d=TRASH_LINES/></button>
                 <button type="submit" class="d-btn d-btn--primary" title="save transaction" aria-busy=move || busy.get().then_some("true")><Ico d=CHECK/>"save"</button>
             </footer>

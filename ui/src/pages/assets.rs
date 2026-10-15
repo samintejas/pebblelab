@@ -217,7 +217,7 @@ pub fn AssetPanel(asset: Option<Asset>) -> impl IntoView {
                 </div>
                 {move || err.get().map(|m| view! { <span class="d-error" role="alert">{format!("error: {m}")}</span> })}
             </div>
-            <footer class="d-row" style="flex:none;justify-content:space-between;flex-wrap:nowrap;gap:8px;padding:12px 16px;border-top:1px solid var(--border-default)">
+            <footer class="d-row" style="flex:none;justify-content:space-between;flex-wrap:nowrap;gap:8px;padding:12px 16px;border-top:1px solid var(--border-subtle)">
                 <span>
                     {id.map(|_| view! { <button type="button" class="d-btn d-btn--danger d-btn--icon" aria-label="delete asset" title="delete asset" on:click=move |_| confirm.set(true)><Ico d=TRASH_LINES/></button> })}
                 </span>

@@ -5,6 +5,7 @@ use leptos_router::hooks::use_navigate;
 use pebblelab_api::*;
 
 use crate::api;
+use crate::hub_art::FinBrand;
 
 #[component]
 fn AuthPage(title: &'static str, sub: &'static str, other: AnyView, #[prop(default = 380)] width: u32, children: Children) -> impl IntoView {
@@ -12,7 +13,7 @@ fn AuthPage(title: &'static str, sub: &'static str, other: AnyView, #[prop(defau
         <SkipLink/>
         <div style="min-height:100dvh;display:flex;flex-direction:column;background:var(--bg-base)">
             <AppBar>
-                <A href="/" attr:class="d-appbar__title" attr:style="text-decoration:none">"pebblelab/fin"</A>
+                <A href="/" attr:aria-label="fin" attr:style="display:flex;text-decoration:none"><FinBrand/></A>
                 <AppBarSpacer/>
                 {other}
             </AppBar>
@@ -62,7 +63,7 @@ fn Leaving() -> impl IntoView {
                 <Pebbles label="taking you to pebblelab" large=true/>
                 <h1 class="d-status-page__title">"taking you to pebblelab"</h1>
             </div>
-            <div class="d-status-page__foot">"pebblelab/fin"</div>
+            <div class="d-status-page__foot">"fin"</div>
         </main>
     }
 }
@@ -76,7 +77,7 @@ fn Providers(verb: &'static str, #[prop(optional)] alone: bool) -> impl IntoView
             <div style="display:flex;flex-direction:column;gap:8px">
                 {(!alone).then(|| view! {
                     <div class="d-row" style="gap:12px;color:var(--text-secondary)" aria-hidden="true">
-                        <span style="flex:1;border-top:1px solid var(--border-default)"></span>"or"<span style="flex:1;border-top:1px solid var(--border-default)"></span>
+                        <span style="flex:1;border-top:1px solid var(--border-subtle)"></span>"or"<span style="flex:1;border-top:1px solid var(--border-subtle)"></span>
                     </div>
                 })}
                 {l.into_iter().map(|p| view! {
