@@ -26,11 +26,6 @@ fn account_href(page: &str) -> (String, bool) {
     }
 }
 
-/// Fin's address, from the account.
-fn fin_href() -> String {
-    api::options().fin.unwrap_or_else(|| "/".into())
-}
-
 #[component]
 pub fn Switcher(here: Here, #[prop(into)] on_sign_out: Callback<()>) -> impl IntoView {
     let app = expect_context::<AppState>();
@@ -117,7 +112,7 @@ pub fn Switcher(here: Here, #[prop(into)] on_sign_out: Callback<()>) -> impl Int
                             <div class="sb__apps">
                                 {match here {
                                     Here::Fin => view! { <span class="d-apps__tile" aria-current="true"><span class="d-apps__mark" aria-hidden="true"><Ico d=WALLET/></span><span class="d-apps__name">"fin"</span></span> }.into_any(),
-                                    Here::Account => view! { <a class="d-apps__tile" href=fin_href() rel="external"><span class="d-apps__mark" aria-hidden="true"><Ico d=WALLET/></span><span class="d-apps__name">"fin"</span></a> }.into_any(),
+                                    Here::Account => view! { <a class="d-apps__tile" href=api::fin_app() rel="external"><span class="d-apps__mark" aria-hidden="true"><Ico d=WALLET/></span><span class="d-apps__name">"fin"</span></a> }.into_any(),
                                 }}
                                 {match here {
                                     Here::Account => view! { <span class="d-apps__tile" aria-current="true"><span class="d-apps__mark" aria-hidden="true"><Ico d=USER/></span><span class="d-apps__name">"account"</span></span> }.into_any(),
