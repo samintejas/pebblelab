@@ -9,7 +9,7 @@ description = "pebblelab/fin web app: Leptos (client side) on the dots design sy
 
 [dependencies]
 pebblelab-api = { path = "../crates/api" }
-dots-ui = { version = "0.2", features = ["csr"] }
+dots-ui = { version = "0.3", features = ["csr"] }
 leptos = { version = "0.8.21", features = ["csr"] }
 leptos_router = "0.8"
 gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }

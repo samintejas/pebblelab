@@ -10,7 +10,7 @@ use crate::state::AppState;
 
 const TABS: [(&str, &str, &str, &str); 5] = [
     ("profile", "profile", USER, "your name, picture and how to reach you."),
-    ("prefs", "preferences", SLIDERS, "how pebblelab/fin looks and what it tells you about."),
+    ("prefs", "preferences", SLIDERS, "how fin looks and what it tells you about."),
     ("security", "security", LOCK, "how you sign in, sessions and deleting your account."),
     ("family", "family", USERS, "optional. share accounts and hold joint ones."),
     ("connectors", "connectors", PLUG, "give claude code, chatgpt or any mcp client its own token, with its own permissions."),
@@ -131,7 +131,7 @@ pub(crate) fn ProfileTab() -> impl IntoView {
     let upload_label = move || if picture.get().is_some() { "change picture" } else { "upload picture" };
     view! {
         <form class="d-card" style="max-width:760px" on:submit=move |e| { e.prevent_default(); save() }>
-            <div class="d-card__body d-row" style="gap:16px;border-bottom:1px solid var(--border-default)">
+            <div class="d-card__body d-row" style="gap:16px;border-bottom:1px solid var(--border-subtle)">
                 <span class="d-avatar" role="img" aria-label="your profile picture" style="width:64px;height:64px;font-size:var(--font-size-lg);border-radius:9999px"><Face picture=picture/></span>
                 <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
                     <span class="d-label">"profile picture"</span>

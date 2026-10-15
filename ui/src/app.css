@@ -1,4 +1,4 @@
-/* pebblelab/fin screens. Everything here is layout or a data mark that the dots system does not ship;
+/* fin and pebblelab.in screens. Everything here is layout or a data mark that the dots system does not ship;
    colours, type and controls all come from dots tokens and classes. */
 .d-shell { --rightbar-w: 380px; }
 /* with the 16px the shell already gives main, this makes the 24px 16px the screens are drawn at */
@@ -34,7 +34,7 @@
 @media (max-width: 900px), (max-height: 640px) { .set { grid-template-columns: minmax(0, 1fr); height: auto; } .set > .d-secnav { flex-direction: row; flex-wrap: wrap; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--border-default); } .set__panel { overflow: visible; } }
 
 /* the big amount field and the segmented choice in the side panel */
-.amt:focus-within { box-shadow: inset 0 -1px 0 var(--focus-ring); }
+.amt:focus-within { box-shadow: inset 0 -1px 0 var(--border-focus); }
 
 /* landing: the one decorated surface, outside the app chrome */
 .lp-hero { position: relative; overflow: hidden; background-image: radial-gradient(circle at center, var(--accent-primary-subtle) 0%, transparent 60%), radial-gradient(circle at center, var(--accent-info-subtle) 0%, transparent 60%); background-repeat: no-repeat; background-size: 640px 640px, 720px 720px; background-position: 95% -40%, 55% 160%; animation: lp-orbs 24s ease-in-out infinite alternate; }
@@ -55,11 +55,25 @@
 .pl-app { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); text-decoration: none; color: inherit; }
 .pl-app:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 .pl-app[aria-disabled="true"] { border-style: dashed; background: none; color: var(--text-secondary); }
-.pl-mark { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-soft); border-radius: var(--radius-md); background: var(--bg-base); }
+.pl-mark { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-base); }
 .pl-mark svg { width: 20px; height: 20px; }
-.pl-provider { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 44px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--bg-control); color: var(--text-strong); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
-.pl-provider:hover { background: var(--bg-hover); border-color: var(--border-focus-ring-quiet); }
+.pl-provider { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 44px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-control); color: var(--text-strong); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
+.pl-provider:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 .pl-provider b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-fill); font-size: var(--font-size-xs); font-weight: 600; color: var(--text-max); }
 .pl-panel { display: flex; flex-direction: column; gap: 16px; max-width: 980px; }
 .pl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; align-items: start; }
 @media (prefers-reduced-motion: reduce) { .pl-hero::after { animation: none; opacity: .3; } }
+
+/* the switcher the sidebar tile opens, the same in fin and the account */
+.sb { position: fixed; left: 12px; top: 56px; z-index: 300; width: 300px; max-width: calc(100vw - 24px); padding: 0; overflow: hidden; }
+.sb__sec { padding: 8px; border-top: 1px solid var(--border-subtle); }
+.sb__sec:first-child { border-top: 0; }
+.sb__cap { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 6px; color: var(--text-secondary); font-size: var(--font-size-xs); }
+.sb__apps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.sb__you { display: flex; align-items: center; gap: 10px; padding: 6px 8px 8px; }
+.sb__row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 4px 8px; border: 0; border-radius: var(--radius-sm); background: none; font: inherit; color: var(--text-primary); text-align: left; cursor: pointer; text-decoration: none; }
+.sb__row:hover { background: var(--bg-hover); color: var(--text-strong); }
+.sb__row small { display: block; color: var(--text-secondary); font-size: var(--font-size-xs); }
+.sb__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sb__ctx { display: inline-flex !important; align-items: center; gap: 6px; }
+.sb__ctx::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-primary); }
