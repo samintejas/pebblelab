@@ -1,12 +1,12 @@
 # Checks every push and pull request; deploys to the server when `prod` moves or a `prod*` tag is pushed.
 #
-# The deploy needs these repository secrets (Settings > Secrets and variables > Actions):
-#   VPS_HOST         the server's address
-#   VPS_USER         who to sign in as (the user the service runs as, e.g. samin)
-#   VPS_SSH_KEY      a private key whose public half is in that user's ~/.ssh/authorized_keys
-#   VPS_KNOWN_HOSTS  the server's host key line: ssh-keyscan -t ed25519 <host>
-#   VPS_PORT         optional, default 22
-# and on the server, a sudo rule letting that user run `systemctl restart pebblelab` (see the README).
+# The repository is public, so the deploy is locked down (see "deploying" in the README):
+# - its secrets are environment secrets of `production`, which only the prod branch and prod* tags may use,
+#   so pull requests (forks included) and other branches never see them;
+# - the key can do one thing on the server: its authorized_keys line forces ~/apps/pebblelab/release.sh,
+#   which reads a build from stdin and installs it. No shell, no forwarding, no other commands;
+# - third-party actions are pinned to commits.
+# Environment secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS (ssh-keyscan -t ed25519 <host>), VPS_PORT (optional)
 name: ci
 
 on:
@@ -19,6 +19,9 @@ on:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -36,9 +39,11 @@ jobs:
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U pebblelab" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo test --locked
         env:
           PEBBLELAB_TEST_DB: postgres://pebblelab:pebblelab@localhost:5432/pebblelab
@@ -46,11 +51,12 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
+          toolchain: stable
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
@@ -69,10 +75,9 @@ jobs:
           mkdir -p bundle/ui
           cp target/release/pebblelab bundle/
           cp -r ui/dist bundle/ui/dist
-          cp -r deploy bundle/deploy
           echo "${GITHUB_SHA}" > bundle/REVISION
           tar czf pebblelab.tar.gz -C bundle .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pebblelab
           path: pebblelab.tar.gz
@@ -83,32 +88,25 @@ jobs:
     needs: [test, build]
     runs-on: ubuntu-24.04
     environment: production
+    permissions: {}
     concurrency:
       group: deploy-production
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: deploy
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pebblelab
-      - name: ssh
+      - name: deploy
+        env:
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT || '22' }}
         run: |
           install -d -m 700 ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<CFG
-          Host vps
-            HostName ${{ secrets.VPS_HOST }}
-            User ${{ secrets.VPS_USER }}
-            Port ${{ secrets.VPS_PORT || '22' }}
-            IdentityFile ~/.ssh/id_deploy
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-          CFG
-      - name: upload
-        run: scp pebblelab.tar.gz deploy/release.sh vps:/tmp/
-      - name: release
-        run: ssh vps "bash /tmp/release.sh /tmp/pebblelab.tar.gz ${GITHUB_SHA::12} && rm -f /tmp/release.sh /tmp/pebblelab.tar.gz"
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # the server's authorized_keys runs release.sh for this key whatever is asked; the revision is its argument
+          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p "$PORT" "$USER@$HOST" "${GITHUB_SHA::12}" < pebblelab.tar.gz
+          rm -f ~/.ssh/id_deploy

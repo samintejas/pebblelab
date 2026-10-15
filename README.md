@@ -77,18 +77,33 @@ A forgotten password is reset from an emailed link (Resend: set `PEBBLELAB_RESEN
 
 `.github/workflows/deploy.yml` tests and builds every push and pull request. Pushing to the `prod` branch, or a
 tag starting with `prod` (`git tag prod-2026-10-15 && git push origin prod-2026-10-15`), also deploys: the server
-binary and web app are built on GitHub, copied to the server over ssh, and `deploy/release.sh` swaps them into
-`~/apps/pebblelab`, restarts the service and checks `/health`, going back to the previous release if it does not
-come up. Releases are kept under `~/apps/pebblelab/releases` (the last five).
+binary and web app are built on GitHub and streamed over ssh to `release.sh` on the server, which unpacks them into
+`~/apps/pebblelab/releases/<commit>`, swaps them in, restarts the service and checks `/health`, going back to the
+previous release if it does not come up. The last five releases are kept.
+
+The repository is public, so the deploy gives away as little as it can:
+- its secrets are **environment** secrets of `production`, and that environment only accepts the `prod` branch
+  and `prod*` tags. Pull requests (forks included) and other branches never see them;
+- the deploy key can do exactly one thing: its `authorized_keys` line forces `release.sh`, with no shell, port
+  forwarding or agent. `release.sh` takes a commit hash and a build, nothing else;
+- `release.sh` on the server is installed by hand and a deploy never changes it;
+- the sudo rule allows `systemctl restart pebblelab` and nothing else;
+- third-party actions are pinned to commits.
 
 Once, before the first deploy:
-- add the repository secrets `VPS_HOST`, `VPS_USER` (the service's user), `VPS_SSH_KEY` (a key made for the
-  deploy, its public half in that user's `~/.ssh/authorized_keys`), `VPS_KNOWN_HOSTS`
-  (`ssh-keyscan -t ed25519 <host>`) and, if ssh is not on 22, `VPS_PORT`;
-- let the deploy restart the service without a password, and nothing else:
-  `echo 'samin ALL=(root) NOPASSWD: /usr/bin/systemctl restart pebblelab' | sudo EDITOR='tee' visudo -f /etc/sudoers.d/pebblelab`
-
-The `production` environment the job runs in can be given required reviewers under Settings > Environments.
+1. On your computer, make a key for the deploy only: `ssh-keygen -t ed25519 -N '' -C pebblelab-deploy -f pebblelab-deploy`.
+2. On the server, as samin:
+   ```sh
+   install -m 755 deploy/release.sh ~/apps/pebblelab/release.sh      # from a checkout, or copy it over
+   echo "restrict,command=\"$HOME/apps/pebblelab/release.sh\" $(cat pebblelab-deploy.pub)" >> ~/.ssh/authorized_keys
+   echo 'samin ALL=(root) NOPASSWD: /usr/bin/systemctl restart pebblelab' | sudo EDITOR='tee' visudo -f /etc/sudoers.d/pebblelab
+   ```
+3. On GitHub, Settings > Environments > New environment `production`. Under deployment branches and tags choose
+   "selected branches and tags" and add the branch `prod` and the tag pattern `prod*`. Add its secrets:
+   `VPS_HOST`, `VPS_USER` (samin), `VPS_SSH_KEY` (the private key `pebblelab-deploy`), `VPS_KNOWN_HOSTS`
+   (`ssh-keyscan -t ed25519 <host>`) and, if ssh is not on 22, `VPS_PORT`. Then delete the private key from your computer.
+4. Optionally, Settings > Rules: protect the `prod` branch and `prod*` tags so only you can push them, and add
+   yourself as a required reviewer on `production` to approve each deploy.
 
 ## cli
 
