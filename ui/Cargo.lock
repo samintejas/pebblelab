@@ -283,9 +283,9 @@ dependencies = [
 
 [[package]]
 name = "dots-ui"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3e6d46e53dcce14a3d37e0d932b82457d85517cff6d4f9cbb30f39a244538a"
+checksum = "cb05d96dad12cf02f57d08f4b1428455f99199ddf86e51cd6b13054f0420998b"
 dependencies = [
  "js-sys",
  "leptos",
