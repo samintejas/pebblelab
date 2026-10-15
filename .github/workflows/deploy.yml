@@ -99,11 +99,21 @@ jobs:
       - name: deploy
         env:
           KEY: ${{ secrets.VPS_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
-          HOST: ${{ secrets.VPS_HOST }}
-          USER: ${{ secrets.VPS_USER }}
-          PORT: ${{ secrets.VPS_PORT || '22' }}
+          # not secret on their own, so these may be environment variables instead
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS || vars.VPS_KNOWN_HOSTS }}
+          HOST: ${{ secrets.VPS_HOST || vars.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER || vars.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT || vars.VPS_PORT || '22' }}
         run: |
+          missing=""
+          for v in KEY:VPS_SSH_KEY KNOWN_HOSTS:VPS_KNOWN_HOSTS HOST:VPS_HOST USER:VPS_USER; do
+            name=${v%%:*}
+            [ -n "${!name}" ] || missing="$missing ${v#*:}"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::not set for the production environment:$missing. Add them under Settings > Environments > production (environment secrets), not as repository variables."
+            exit 1
+          fi
           install -d -m 700 ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
