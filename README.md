@@ -73,6 +73,23 @@ A forgotten password is reset from an emailed link (Resend: set `PEBBLELAB_RESEN
 - Sessions end after 30 days unused (180 at most). Sign-in is limited to 8 tries per address per 15 minutes, and a
   response to too many tries is `429`.
 
+## deploying
+
+`.github/workflows/deploy.yml` tests and builds every push and pull request. Pushing to the `prod` branch, or a
+tag starting with `prod` (`git tag prod-2026-10-15 && git push origin prod-2026-10-15`), also deploys: the server
+binary and web app are built on GitHub, copied to the server over ssh, and `deploy/release.sh` swaps them into
+`~/apps/pebblelab`, restarts the service and checks `/health`, going back to the previous release if it does not
+come up. Releases are kept under `~/apps/pebblelab/releases` (the last five).
+
+Once, before the first deploy:
+- add the repository secrets `VPS_HOST`, `VPS_USER` (the service's user), `VPS_SSH_KEY` (a key made for the
+  deploy, its public half in that user's `~/.ssh/authorized_keys`), `VPS_KNOWN_HOSTS`
+  (`ssh-keyscan -t ed25519 <host>`) and, if ssh is not on 22, `VPS_PORT`;
+- let the deploy restart the service: `sudo install -m 440 deploy/pebblelab.sudoers /etc/sudoers.d/pebblelab`
+  (`root-setup.sh` does this too). It allows `systemctl restart pebblelab` and nothing else.
+
+The `production` environment the job runs in can be given required reviewers under Settings > Environments.
+
 ## cli
 
 It works on the database directly (no server needed). `--as <email>` (or `PEBBLELAB_USER`) says whose data it is;

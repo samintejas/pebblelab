@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run once as root on the server: sudo bash ~/deploy/root-setup.sh
-# Installs the web server config, the app's service and the daily backup, and starts them.
+# Installs the web server config, the app's service, the daily backup and the deploy's sudo rule, and starts them.
 # Postgres must already be up (docker compose up -d in ~/infra/postgres) and the app's .env in place.
 set -euo pipefail
 d=$(dirname "$(readlink -f "$0")")
@@ -12,6 +12,8 @@ caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 install -m 644 "$d/pebblelab.service" /etc/systemd/system/pebblelab.service
 install -m 644 "$d/pg-backup.service" /etc/systemd/system/pg-backup.service
 install -m 644 "$d/pg-backup.timer" /etc/systemd/system/pg-backup.timer
+visudo -cf "$d/pebblelab.sudoers"
+install -m 440 "$d/pebblelab.sudoers" /etc/sudoers.d/pebblelab
 systemctl daemon-reload
 systemctl enable --now docker caddy pebblelab pg-backup.timer
 systemctl reload caddy || systemctl restart caddy

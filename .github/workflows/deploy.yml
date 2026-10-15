@@ -1,0 +1,114 @@
+# Checks every push and pull request; deploys to the server when `prod` moves or a `prod*` tag is pushed.
+#
+# The deploy needs these repository secrets (Settings > Secrets and variables > Actions):
+#   VPS_HOST         the server's address
+#   VPS_USER         who to sign in as (the user the service runs as, e.g. samin)
+#   VPS_SSH_KEY      a private key whose public half is in that user's ~/.ssh/authorized_keys
+#   VPS_KNOWN_HOSTS  the server's host key line: ssh-keyscan -t ed25519 <host>
+#   VPS_PORT         optional, default 22
+# and on the server, the sudo rule from deploy/pebblelab.sudoers (root-setup.sh installs it).
+name: ci
+
+on:
+  push:
+    branches: [master, prod]
+    tags: ["prod", "prod-*", "prod/*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pebblelab
+          POSTGRES_PASSWORD: pebblelab
+          POSTGRES_DB: pebblelab
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U pebblelab" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked
+        env:
+          PEBBLELAB_TEST_DB: postgres://pebblelab:pebblelab@localhost:5432/pebblelab
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            ui -> target
+      - name: wasm-bindgen and wasm-opt
+        run: |
+          v=$(grep -A1 'name = "wasm-bindgen"' ui/Cargo.lock | sed -n 's/version = "\(.*\)"/\1/p')
+          curl -sSfL "https://github.com/rustwasm/wasm-bindgen/releases/download/$v/wasm-bindgen-$v-x86_64-unknown-linux-musl.tar.gz" | tar xz -C /tmp
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-linux.tar.gz" | tar xz -C /tmp
+          echo "/tmp/wasm-bindgen-$v-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+          echo "/tmp/binaryen-version_123/bin" >> "$GITHUB_PATH"
+      - run: cargo build --release --locked -p pebblelab
+      - run: ui/build.sh
+      - name: bundle
+        run: |
+          mkdir -p bundle/ui
+          cp target/release/pebblelab bundle/
+          cp -r ui/dist bundle/ui/dist
+          cp -r deploy bundle/deploy
+          echo "${GITHUB_SHA}" > bundle/REVISION
+          tar czf pebblelab.tar.gz -C bundle .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pebblelab
+          path: pebblelab.tar.gz
+          retention-days: 14
+
+  deploy:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/prod' || startsWith(github.ref, 'refs/tags/prod'))
+    needs: [test, build]
+    runs-on: ubuntu-24.04
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+      - uses: actions/download-artifact@v4
+        with:
+          name: pebblelab
+      - name: ssh
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USER }}
+            Port ${{ secrets.VPS_PORT || '22' }}
+            IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+      - name: upload
+        run: scp pebblelab.tar.gz deploy/release.sh vps:/tmp/
+      - name: release
+        run: ssh vps "bash /tmp/release.sh /tmp/pebblelab.tar.gz ${GITHUB_SHA::12} && rm -f /tmp/release.sh /tmp/pebblelab.tar.gz"
