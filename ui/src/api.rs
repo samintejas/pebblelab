@@ -288,6 +288,13 @@ pub fn hub_sign_in() -> Option<String> {
     options().hub.map(|h| format!("{h}/signin?to=fin"))
 }
 
+/// Where a signed-in link from the hub opens fin: its transactions, not its landing page. Fin keeps its own
+/// session (another address, another storage), so without one there it goes on to the hub's sign-in, which
+/// is already signed in and hands it one; with one it opens at once.
+pub fn fin_app() -> String {
+    options().fin.map(|f| format!("{}/transactions", f.trim_end_matches('/'))).unwrap_or_else(|| "/".into())
+}
+
 /// Swap the signed-in person for a one-time code and open fin with it.
 pub async fn open_fin() -> Result<(), ApiError> {
     #[derive(serde::Deserialize)]
