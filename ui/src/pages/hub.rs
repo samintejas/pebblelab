@@ -66,6 +66,7 @@ fn FinGlyph() -> impl IntoView {
     }
 }
 
+/// Fin's front page, for people not signed in yet.
 fn fin_href() -> String {
     api::options().fin.unwrap_or_else(|| "/".into())
 }
@@ -387,7 +388,7 @@ fn Home() -> impl IntoView {
     let family = move || app.me.with(|m| m.as_ref().and_then(|m| m.family.clone()));
     view! {
         <div class="pl-grid">
-            <a class="pl-app" href=fin_href() rel="external" style="grid-column:1 / -1">
+            <a class="pl-app" href=api::fin_app() rel="external" style="grid-column:1 / -1">
                 <span class="pl-mark" aria-hidden="true"><FinGlyph/></span>
                 <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="color:var(--text-strong);font-weight:500">"fin"</b><span style="color:var(--text-secondary)">{move || { let n = app.accounts.with(|a| a.iter().filter(|a| !a.archived).count()); if n == 0 { "a household money tracker".to_string() } else if n == 1 { "1 account".to_string() } else { format!("{n} accounts") } }}</span></span>
                 <span class="d-btn d-btn--secondary">"open"</span>
