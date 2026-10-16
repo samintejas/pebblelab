@@ -1,5 +1,6 @@
 #![recursion_limit = "256"] // the tool list in mcp.rs is one big json! literal
 mod cli;
+mod connect;
 mod limit;
 mod mail;
 mod mcp;

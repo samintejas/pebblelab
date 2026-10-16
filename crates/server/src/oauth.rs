@@ -104,6 +104,11 @@ impl Oauth {
         self.fin.as_deref()
     }
 
+    /// The address this server is reached at, without a trailing slash. Empty when not set.
+    pub fn public_url(&self) -> &str {
+        &self.public_url
+    }
+
     pub fn password(&self) -> bool {
         self.password
     }
