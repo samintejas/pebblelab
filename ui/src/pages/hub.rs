@@ -12,6 +12,7 @@ use super::settings::{Connectors, FamilyTab, ProfileTab};
 use crate::api;
 use crate::hub_art::{FIN, MARK, Wordmark};
 use crate::icons::*;
+use crate::pages::connect::take_connect;
 use crate::pages::switcher::{Here, Switcher};
 use crate::state::AppState;
 
@@ -44,6 +45,7 @@ pub fn HubApp() -> impl IntoView {
                     <Route path=path!("/") view=Landing/>
                     <Route path=path!("/signin") view=SignIn/>
                     <Route path=path!("/auth/callback") view=Callback/>
+                    <Route path=path!("/connect") view=crate::pages::connect::Connect/>
                     <ParentRoute path=path!("") view=HubShell>
                         <Route path=path!("account") view=Home/>
                         <Route path=path!("profile") view=Profile/>
@@ -159,13 +161,15 @@ fn Soon(d: &'static str, name: &'static str, text: &'static str) -> impl IntoVie
 #[component]
 fn SignIn() -> impl IntoView {
     let q = use_query_map();
-    let to = move || q.with(|q| q.get("to")).filter(|t| t == "fin");
+    let to = move || q.with(|q| q.get("to")).filter(|t| t == "fin" || t == "connect");
     let nav = use_navigate();
     let err = RwSignal::new(api::hash_params().remove("error"));
     let busy = RwSignal::new(false);
     remember_to(to().as_deref());
     if api::load_token().is_some() && err.get_untracked().is_none() {
-        if to().is_some() {
+        if to().as_deref() == Some("connect") {
+            nav(&take_connect().unwrap_or_else(|| "/account".into()), Default::default());
+        } else if to().is_some() {
             busy.set(true);
             leptos::task::spawn_local(async move {
                 if let Err(e) = api::open_fin().await {
@@ -205,7 +209,9 @@ fn SignIn() -> impl IntoView {
                             <div class="d-card__body" style="padding:24px;display:flex;flex-direction:column;gap:16px">
                                 <div style="display:flex;flex-direction:column;gap:4px">
                                     <h1 class="heading-xl" style="margin:0;color:var(--text-strong)">"sign in"</h1>
-                                    {move || if to().is_some() {
+                                    {move || if to().as_deref() == Some("connect") {
+                                        view! { <p style="margin:0;color:var(--text-secondary)">"to connect an app to your account."</p> }.into_any()
+                                    } else if to().is_some() {
                                         view! { <p style="margin:0;color:var(--text-secondary)">"to continue to "<b style="color:var(--text-strong);font-weight:500">"fin"</b>"."</p> }.into_any()
                                     } else {
                                         view! { <p style="margin:0;color:var(--text-secondary)">"to your pebblelab account."</p> }.into_any()
@@ -237,7 +243,9 @@ fn Callback() -> impl IntoView {
         match api::post::<Session>("/auth/redeem", &serde_json::json!({ "code": code, "app": "account" })).await {
             Ok(s) => {
                 api::save_token(&s.token, true);
-                if to.as_deref() == Some("fin") {
+                if to.as_deref() == Some("connect") {
+                    nav(&take_connect().unwrap_or_else(|| "/account".into()), Default::default());
+                } else if to.as_deref() == Some("fin") {
                     if let Err(e) = api::open_fin().await {
                         err.set(Some(e.message));
                     }

@@ -143,6 +143,22 @@ Tools: `list_accounts`, `create_account`, `update_account`, `list_transactions`,
 `update_asset`, `delete_asset`, `list_tags`, `get_insights`, `ask_pebblelab`.
 A token has scopes: `read`, `transactions` (read them), `add`, `edit`; a tool outside them reports the missing scope.
 
+### connecting claude.ai, chatgpt and other remote clients (oauth)
+
+Remote clients add `https://fin.pebblelab.in/mcp` (or the hub's `/mcp`) as a custom connector and sign in; nobody copies
+a token. This follows the MCP authorization spec:
+
+- `/mcp` without a token answers 401 with `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource"`.
+- `/.well-known/oauth-protected-resource` names the hub (`PEBBLELAB_HUB_URL`, else `PEBBLELAB_PUBLIC_URL`) as the
+  authorization server; `/.well-known/oauth-authorization-server` there lists `/register`, `/authorize` and `/token`.
+- `/register` is dynamic client registration (public clients, no secret). Redirects must be https, `http://localhost`
+  or an app's own scheme. Clients nobody approved are forgotten after a day.
+- `/authorize` sends the browser to the web app's `/connect` page: sign in if needed, see the client's name and where
+  approving sends you, choose its scopes, allow or cancel. PKCE (S256) is required.
+- `/token` swaps the code (once, within ten minutes, with the PKCE verifier) for a connector token. It does not expire
+  and there is no refresh token: it shows on the connectors page like any other, where it can be changed or revoked.
+  Connecting the same client again replaces its token.
+
 ## model
 
 - Amounts are integer minor units; balances are never stored (`opening + sum(transactions)`); a loan's balance

@@ -35,6 +35,15 @@ impl Store {
         .await?
         .rows_affected();
         n += sqlx::query("DELETE FROM password_resets WHERE created_at < utc_text(now() - interval '1 hour')").execute(&self.pool).await?.rows_affected();
+        n += sqlx::query("DELETE FROM oauth_codes WHERE created_at < utc_text(now() - interval '10 minutes')").execute(&self.pool).await?.rows_affected();
+        // anyone can register an mcp client: forget the ones nobody approved within a day
+        n += sqlx::query(
+            "DELETE FROM oauth_clients c WHERE created_at < utc_text(now() - interval '1 day') \
+             AND NOT EXISTS (SELECT 1 FROM tokens t WHERE t.client_id = c.id) AND NOT EXISTS (SELECT 1 FROM oauth_codes o WHERE o.client_id = c.id)",
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
         n += sqlx::query("DELETE FROM notifications WHERE created_at < utc_text(now() - interval '90 days')").execute(&self.pool).await?.rows_affected();
         n += sqlx::query("UPDATE families SET invite_code = NULL, invite_expires = NULL WHERE invite_expires IS NOT NULL AND invite_expires < utc_now()")
             .execute(&self.pool)
