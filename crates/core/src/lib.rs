@@ -4,6 +4,7 @@
 mod accounts;
 mod assets;
 mod auth;
+mod connect;
 mod error;
 mod family;
 mod insights;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
+pub use connect::Issued;
 pub use error::{Error, Result};
 pub use reset::ResetTicket;
 pub use scheduler::JobReport;

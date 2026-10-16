@@ -50,6 +50,8 @@ pub struct Limits {
     pub reset: Limiter,
     /// Tries at an invite code by one person.
     pub join: Limiter,
+    /// MCP clients registering themselves.
+    pub register: Limiter,
     pub trust_proxy: bool,
 }
 
@@ -62,6 +64,7 @@ impl Limits {
             sign_up: Limiter::new(10, Duration::from_secs(3600)),
             reset: Limiter::new(5, Duration::from_secs(3600)),
             join: Limiter::new(10, Duration::from_secs(3600)),
+            register: Limiter::new(20, Duration::from_secs(3600)),
             trust_proxy,
         }
     }

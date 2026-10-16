@@ -5,15 +5,16 @@ use std::time::Duration;
 
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, DefaultBodyLimit, Extension, FromRequestParts, Path, Query, State};
-use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_DISPOSITION, COOKIE, LOCATION, SET_COOKIE, CONTENT_SECURITY_POLICY, CONTENT_TYPE, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS};
+use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_DISPOSITION, COOKIE, LOCATION, SET_COOKIE, CONTENT_SECURITY_POLICY, CONTENT_TYPE, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS, WWW_AUTHENTICATE};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tower_http::compression::CompressionLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
@@ -22,6 +23,7 @@ use crate::mail::Mailer;
 use pebblelab_core::api::*;
 use pebblelab_core::{Caller, Error, Store};
 
+use crate::connect;
 use crate::limit::Limits;
 use crate::mcp;
 use crate::oauth::Oauth;
@@ -138,18 +140,28 @@ pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oau
         .route("/notifications/read", post(read_notifications))
         .route("/connectors", get(connectors).post(create_connector))
         .route("/connectors/{id}", delete(revoke_connector).patch(update_connector))
+        .route("/connect/info", post(connect::info))
+        .route("/connect/decide", post(connect::decide))
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({ "error": "no such route" }))) })
         .layer(DefaultBodyLimit::max(12 * 1024 * 1024));
     let header = |name: HeaderName, value: &'static str| SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value));
     Router::new()
         .route("/health", get(health))
-        .route("/mcp", post(mcp_http))
-        // MCP clients look here for OAuth before trying a bearer token. The web app's catch-all page would
-        // answer 200 with html, which they cannot read; say plainly there is nothing.
-        .route("/.well-known/{*rest}", any(no_oauth))
-        .route("/authorize", any(no_oauth))
-        .route("/token", any(no_oauth))
-        .route("/register", any(no_oauth))
+        .route("/authorize", get(connect::authorize))
+        // what MCP clients call from outside, some of them from a browser: open to any origin. None of it uses
+        // cookies, so that lends nothing to another site.
+        .merge(
+            Router::new()
+                .route("/mcp", post(mcp_http))
+                .route("/.well-known/oauth-protected-resource", get(connect::protected_resource))
+                .route("/.well-known/oauth-protected-resource/mcp", get(connect::protected_resource))
+                .route("/.well-known/oauth-authorization-server", get(connect::authorization_server))
+                // the web app's catch-all page would answer anything else here with html, which clients cannot read
+                .route("/.well-known/{*rest}", any(not_here))
+                .route("/register", post(connect::register))
+                .route("/token", post(connect::token))
+                .layer(CorsLayer::new().allow_origin(Any).allow_methods([Method::GET, Method::POST]).allow_headers([AUTHORIZATION, CONTENT_TYPE, HeaderName::from_static("mcp-protocol-version")]).expose_headers([WWW_AUTHENTICATE])),
+        )
         .nest("/api", api)
         .with_state(store)
         // The Leptos UI. Unknown paths fall back to index.html so client routes survive a refresh.
@@ -173,11 +185,19 @@ async fn health(State(s): State<Store>) -> Result<&'static str, StatusCode> {
     s.ping().await.map(|_| "ok").map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
 }
 
-async fn no_oauth() -> (StatusCode, Json<Value>) {
-    (StatusCode::NOT_FOUND, Json(json!({ "error": "this server uses bearer tokens, not oauth" })))
+async fn not_here() -> (StatusCode, Json<Value>) {
+    (StatusCode::NOT_FOUND, Json(json!({ "error": "nothing here" })))
 }
 
-async fn mcp_http(State(s): State<Store>, Auth(c, _): Auth, Json(req): Json<Value>) -> Response {
+async fn mcp_http(State(s): State<Store>, Extension(o): Extension<Arc<Oauth>>, headers: HeaderMap, auth: Result<Auth, ApiError>, body: Bytes) -> Response {
+    // without a token, say where to get one before looking at the body
+    let c = match auth {
+        Ok(Auth(c, _)) => c,
+        Err(_) => return connect::unauthorized(&o, &headers),
+    };
+    let Ok(req) = serde_json::from_slice::<Value>(&body) else {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": "parse error: send a JSON-RPC message" } }))).into_response();
+    };
     // a batch or a single message
     match req {
         Value::Array(batch) => {
@@ -734,15 +754,106 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn oauth_discovery_gets_json_not_the_web_app() {
+    async fn well_known_paths_get_json_not_the_web_app() {
         let (app, _) = app().await;
-        for path in ["/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server", "/authorize"] {
-            let (s, v) = json(&app, "GET", path, None, None).await;
-            assert_eq!(s, StatusCode::NOT_FOUND, "{path}");
-            assert!(v["error"].is_string(), "{path}: {v}");
-        }
-        let (s, _) = json(&app, "POST", "/register", None, Some(json!({}))).await;
+        let (s, v) = json(&app, "GET", "/.well-known/openid-configuration", None, None).await;
         assert_eq!(s, StatusCode::NOT_FOUND);
+        assert!(v["error"].is_string(), "{v}");
+    }
+
+    /// A form post, as OAuth clients send to the token endpoint.
+    async fn form(app: &Router, uri: &str, body: &[(&str, &str)]) -> (StatusCode, Value) {
+        let req = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("x-forwarded-for", "10.0.0.9")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(serde_urlencoded::to_string(body).unwrap()))
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let s = res.status();
+        (s, serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap_or(Value::Null))
+    }
+
+    #[tokio::test]
+    async fn an_mcp_client_connects_with_oauth() {
+        use base64::Engine;
+        use sha2::Digest;
+        let (app, _) = app().await;
+        let a = sign_up(&app, "anita").await;
+        // no token: /mcp says where to read about signing in
+        let (s, h, _) = call(&app, "POST", "/mcp", None, Some(json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})), "10.0.0.9").await;
+        assert_eq!(s, StatusCode::UNAUTHORIZED);
+        assert_eq!(h[WWW_AUTHENTICATE], "Bearer resource_metadata=\"http://localhost/.well-known/oauth-protected-resource\"");
+        let (_, pr) = json(&app, "GET", "/.well-known/oauth-protected-resource", None, None).await;
+        assert_eq!(pr["resource"], "http://localhost/mcp");
+        let (_, asm) = json(&app, "GET", "/.well-known/oauth-authorization-server", None, None).await;
+        assert_eq!((asm["issuer"].as_str(), asm["code_challenge_methods_supported"][0].as_str()), (pr["authorization_servers"][0].as_str(), Some("S256")));
+
+        // it registers, with a redirect it may use
+        let cb = "https://claude.ai/api/mcp/auth_callback";
+        let (s, v) = json(&app, "POST", "/register", None, Some(json!({"client_name": "claude", "redirect_uris": ["http://evil.example/cb"]}))).await;
+        assert_eq!((s, v["error"].as_str()), (StatusCode::BAD_REQUEST, Some("invalid_redirect_uri")));
+        let (s, reg) = json(&app, "POST", "/register", None, Some(json!({"client_name": "claude", "redirect_uris": [cb]}))).await;
+        assert_eq!(s, StatusCode::CREATED, "{reg}");
+        let client = reg["client_id"].as_str().unwrap().to_string();
+
+        // the browser goes to /authorize, which hands it to the consent page
+        let (s, h, _) = call(&app, "GET", &format!("/authorize?response_type=code&client_id={client}"), None, None, "10.0.0.9").await;
+        assert_eq!((s, h[LOCATION].to_str().unwrap()), (StatusCode::SEE_OTHER, format!("/connect?response_type=code&client_id={client}").as_str()));
+
+        let verifier = "a-verifier-long-enough-to-be-a-real-pkce-verifier-0123456789";
+        let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sha2::Sha256::digest(verifier.as_bytes()));
+        let request = json!({"response_type": "code", "client_id": client, "redirect_uri": cb, "scope": "read add", "state": "xyz", "code_challenge": challenge, "code_challenge_method": "S256"});
+        let (s, info) = json(&app, "POST", "/api/connect/info", None, Some(request.clone())).await;
+        assert_eq!((s, info), (StatusCode::OK, json!({"client_name": "claude", "sends_to": "claude.ai", "scopes": ["read", "add"]})));
+        let mut elsewhere = request.clone();
+        elsewhere["redirect_uri"] = json!("https://evil.example/cb");
+        assert_eq!(json(&app, "POST", "/api/connect/info", None, Some(elsewhere)).await.0, StatusCode::BAD_REQUEST, "only to a registered redirect");
+
+        // a token cannot approve; the person can, and may give less than was asked
+        let (_, made) = json(&app, "POST", "/api/connectors", Some(&a), Some(json!({"name": "script", "scopes": ["read", "edit"]}))).await;
+        let decision = json!({"request": request, "allow": true, "scopes": ["read"]});
+        assert_eq!(json(&app, "POST", "/api/connect/decide", made["token"].as_str(), Some(decision.clone())).await.0, StatusCode::FORBIDDEN);
+        let (s, d) = json(&app, "POST", "/api/connect/decide", Some(&a), Some(decision.clone())).await;
+        assert_eq!(s, StatusCode::OK, "{d}");
+        let back = d["redirect"].as_str().unwrap();
+        let q: std::collections::HashMap<String, String> = serde_urlencoded::from_str(back.strip_prefix(&format!("{cb}?")).unwrap()).unwrap();
+        assert_eq!((q["state"].as_str(), q["iss"].as_str()), ("xyz", "http://localhost"));
+        let code = q["code"].clone();
+
+        // the code needs the verifier, and works once
+        let swap = |v: &'static str| [("grant_type", "authorization_code"), ("client_id", client.as_str()), ("redirect_uri", cb), ("code", code.as_str()), ("code_verifier", v)].map(|(k, v)| (k, v.to_string()));
+        let wrong = swap("the-wrong-verifier-that-is-also-quite-long-enough-0123456789");
+        let (s, v) = form(&app, "/token", &wrong.iter().map(|(k, v)| (*k, v.as_str())).collect::<Vec<_>>()).await;
+        assert_eq!((s, v["error"].as_str()), (StatusCode::BAD_REQUEST, Some("invalid_grant")));
+        // the wrong verifier spent it: approve again
+        let (_, d) = json(&app, "POST", "/api/connect/decide", Some(&a), Some(decision.clone())).await;
+        let q: std::collections::HashMap<String, String> = serde_urlencoded::from_str(d["redirect"].as_str().unwrap().split_once('?').unwrap().1).unwrap();
+        let body = [("grant_type", "authorization_code"), ("client_id", client.as_str()), ("redirect_uri", cb), ("code", q["code"].as_str()), ("code_verifier", verifier)];
+        let (s, t) = form(&app, "/token", &body).await;
+        assert_eq!((s, t["token_type"].as_str(), t["scope"].as_str()), (StatusCode::OK, Some("Bearer"), Some("read")), "{t}");
+        assert_eq!(form(&app, "/token", &body).await.0, StatusCode::BAD_REQUEST, "the code works once");
+
+        // the token is a connector, held to what was approved
+        let token = t["access_token"].as_str().unwrap();
+        let (_, tools) = json(&app, "POST", "/mcp", Some(token), Some(json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))).await;
+        let names: Vec<&str> = tools["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"list_accounts") && !names.contains(&"add_transaction"), "{names:?}");
+        let listed = |v: &Value| v.as_array().unwrap().iter().filter(|c| c["name"] == "claude").count();
+        assert_eq!(listed(&json(&app, "GET", "/api/connectors", Some(&a), None).await.1), 1);
+
+        // connecting again replaces it
+        let (_, d) = json(&app, "POST", "/api/connect/decide", Some(&a), Some(decision)).await;
+        let q: std::collections::HashMap<String, String> = serde_urlencoded::from_str(d["redirect"].as_str().unwrap().split_once('?').unwrap().1).unwrap();
+        let body = [("grant_type", "authorization_code"), ("client_id", client.as_str()), ("redirect_uri", cb), ("code", q["code"].as_str()), ("code_verifier", verifier)];
+        assert_eq!(form(&app, "/token", &body).await.0, StatusCode::OK);
+        assert_eq!(listed(&json(&app, "GET", "/api/connectors", Some(&a), None).await.1), 1);
+        assert_eq!(json(&app, "GET", "/api/accounts", Some(token), None).await.0, StatusCode::UNAUTHORIZED, "the old token is gone");
+
+        // saying no sends the client an error, not a code
+        let (_, d) = json(&app, "POST", "/api/connect/decide", Some(&a), Some(json!({"request": request, "allow": false}))).await;
+        assert_eq!(d["redirect"].as_str().unwrap(), format!("{cb}?error=access_denied&state=xyz&iss=http%3A%2F%2Flocalhost"));
     }
 
     #[tokio::test]

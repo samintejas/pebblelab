@@ -495,7 +495,7 @@ fn CopyBox(label: &'static str, #[prop(into)] value: Signal<String>, #[prop(opti
     }
 }
 
-const PERMS: [(&str, &str); 4] = [
+pub(crate) const PERMS: [(&str, &str); 4] = [
     ("read accounts and balances", "read"),
     ("read transactions", "transactions"),
     ("add transactions", "add"),
@@ -524,7 +524,7 @@ pub(crate) fn Connectors() -> impl IntoView {
     });
     let url = format!("{}/mcp", api::options().fin.or_else(|| web_sys::window().and_then(|w| w.location().origin().ok())).unwrap_or_default());
     let url2 = url.clone();
-    let (url3, url4) = (url.clone(), url.clone());
+    let (url3, url4, url5) = (url.clone(), url.clone(), url.clone());
     let tok = move || fresh.with(|f| f.as_ref().map(|(_, t)| t.clone())).unwrap_or_else(|| "YOUR_TOKEN".to_string());
     let create = move |e: leptos::ev::SubmitEvent| {
         e.prevent_default();
@@ -582,7 +582,7 @@ pub(crate) fn Connectors() -> impl IntoView {
                         <input class="d-input" id="cn-url" type="text" readonly=true aria-label="server address" value=url style="flex:1;min-width:0"/>
                         <button type="button" class="d-btn d-btn--ghost d-btn--icon" aria-label="copy server address" title="copy" on:click=move |_| copy(app, url2.clone())><Ico d=COPY/></button>
                     </div>
-                    <span class="d-hint">"clients send a token as a bearer token. make one per client below."</span>
+                    <span class="d-hint">"apps like claude.ai sign in here themselves. others send a token, made below, as a bearer token."</span>
                 </div>
             </section>
             <section class="d-card" aria-labelledby="cn-c">
@@ -591,7 +591,7 @@ pub(crate) fn Connectors() -> impl IntoView {
                     <span class="d-hint">{move || if fresh.with(|f| f.is_some()) { "these include the token you just made." } else { "replace YOUR_TOKEN with a token from below. a token is only shown in full when it is made." }}</span>
                     <CopyBox label="claude code (terminal)" value=Signal::derive(move || format!("claude mcp add --transport http pebblelab {} \\\n  --header \"Authorization: Bearer {}\"", url3, tok()))/>
                     <CopyBox label="config file (.mcp.json and other clients)" value=Signal::derive(move || format!("{{\n  \"mcpServers\": {{\n    \"pebblelab\": {{\n      \"type\": \"http\",\n      \"url\": \"{}\",\n      \"headers\": {{ \"Authorization\": \"Bearer {}\" }}\n    }}\n  }}\n}}", url4, tok()))/>
-                    <CopyBox label="claude.ai and the mobile app: header value" value=Signal::derive(move || format!("Bearer {}", tok())) hint="claude.ai, then customize, connectors, add custom connector. paste the server address, add a header named Authorization with this value. it then shows in the mobile app too. the server must be reachable from the internet over https."/>
+                    <CopyBox label="claude.ai, chatgpt and the mobile apps" value=Signal::derive(move || url5.clone()) hint="add a custom connector with this address. it sends you here to sign in and choose what it may do: there is no token to copy, and it shows in the list below once approved."/>
                 </div>
             </section>
             {move || fresh.get().map(|(name, token)| {

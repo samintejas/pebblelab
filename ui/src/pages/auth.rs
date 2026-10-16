@@ -40,6 +40,11 @@ fn other(prompt: &'static str, href: &'static str, label: &'static str) -> AnyVi
     .into_any()
 }
 
+/// Where to go once signed in: back to an app waiting to connect, or the transactions.
+fn after_sign_in() -> String {
+    crate::pages::connect::take_connect().unwrap_or_else(|| "/transactions".into())
+}
+
 /// With the account hub in use, signing in, signing up and resetting all happen at pebblelab.in: go there.
 /// Returns true when the page is leaving, so there is nothing to draw.
 fn to_hub() -> bool {
@@ -103,7 +108,7 @@ pub fn AuthCallback() -> impl IntoView {
         match api::post::<Session>("/auth/redeem", &serde_json::json!({ "code": code, "app": "fin" })).await {
             Ok(s) => {
                 api::save_token(&s.token, true);
-                nav("/transactions", Default::default());
+                nav(&after_sign_in(), Default::default());
             }
             Err(e) => err.set(Some(if e.unauthorized() { "this sign-in expired or was already used: start again".into() } else { e.message })),
         }
@@ -136,7 +141,7 @@ fn SignInPage() -> impl IntoView {
             match api::post::<Session>("/auth/signin", &serde_json::json!({"email": email.get_untracked(), "password": pass.get_untracked()})).await {
                 Ok(s) => {
                     api::save_token(&s.token, keep.get_untracked());
-                    nav("/transactions", Default::default());
+                    nav(&after_sign_in(), Default::default());
                 }
                 Err(e) => {
                     err.set(Some(if e.unauthorized() { "email or password is wrong".into() } else { e.message }));
@@ -185,7 +190,7 @@ fn SignUpPage() -> impl IntoView {
             match api::post::<Session>("/auth/signup", &serde_json::json!({"name": name.get_untracked(), "email": email.get_untracked(), "password": pass.get_untracked()})).await {
                 Ok(s) => {
                     api::save_token(&s.token, true);
-                    nav("/transactions", Default::default());
+                    nav(&after_sign_in(), Default::default());
                 }
                 Err(e) => {
                     err.set(Some(e.message));

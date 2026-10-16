@@ -764,6 +764,54 @@ pub struct CreatedConnector {
     pub connector: Connector,
 }
 
+/// An MCP client (Claude, ChatGPT, ...) asking to connect: the OAuth authorization request, as `/authorize`
+/// received it and the hub's consent page passes it back.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ConnectRequest {
+    #[serde(default)]
+    pub response_type: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default)]
+    pub redirect_uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub code_challenge: String,
+    #[serde(default)]
+    pub code_challenge_method: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource: Option<String>,
+}
+
+/// What the consent page shows about a connect request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConnectInfo {
+    /// The name the client registered with. Anyone can register any name, so the page shows `sends_to` too.
+    pub client_name: String,
+    /// Where approving sends you: a site's host, an app's scheme, or `this computer`.
+    pub sends_to: String,
+    /// The scopes asked for (or the default), to tick on the page.
+    pub scopes: Vec<String>,
+}
+
+/// The person's answer on the consent page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectDecision {
+    pub request: ConnectRequest,
+    pub allow: bool,
+    #[serde(default)]
+    pub scopes: Vec<String>,
+}
+
+/// Where the browser goes next: back to the client, with a code or an error.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectRedirect {
+    pub redirect: String,
+}
+
 /// A way to sign in that an account has: a provider and the address it vouched for.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignInMethod {
