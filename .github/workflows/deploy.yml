@@ -1,11 +1,11 @@
-# Checks every push and pull request. When `prod` moves, it also publishes the build as a GitHub release, tagged
+# Checks every push and pull request. When master moves, it also publishes the build as a GitHub release, tagged
 # prod-<date>-<commit>, with pebblelab.tar.gz attached. The server pulls it with deploy/pull.sh; nothing here can
 # reach the server, so the workflow holds no secrets.
 name: ci
 
 on:
   push:
-    branches: [master, prod]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -77,7 +77,7 @@ jobs:
           retention-days: 14
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [test, build]
     runs-on: ubuntu-24.04
     permissions:

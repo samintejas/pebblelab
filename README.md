@@ -75,7 +75,7 @@ A forgotten password is reset from an emailed link (Resend: set `PEBBLELAB_RESEN
 
 ## deploying
 
-`.github/workflows/deploy.yml` tests and builds every push and pull request. When the `prod` branch moves, it also
+`.github/workflows/deploy.yml` tests and builds every push and pull request. Every push to `master` also
 publishes the build as a GitHub release tagged `prod-<date>-<commit>`, with `pebblelab.tar.gz` and its checksum
 attached. Nothing in CI can reach the server; the server pulls the release:
 
