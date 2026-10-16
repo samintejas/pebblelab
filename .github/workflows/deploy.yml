@@ -1,18 +1,11 @@
-# Checks every push and pull request; deploys to the server when `prod` moves or a `prod*` tag is pushed.
-#
-# The repository is public, so the deploy is locked down (see "deploying" in the README):
-# - its secrets are environment secrets of `production`, which only the prod branch and prod* tags may use,
-#   so pull requests (forks included) and other branches never see them;
-# - the key can do one thing on the server: its authorized_keys line forces ~/apps/pebblelab/release.sh,
-#   which reads a build from stdin and installs it. No shell, no forwarding, no other commands;
-# - third-party actions are pinned to commits.
-# Environment secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS (ssh-keyscan -t ed25519 <host>), VPS_PORT (optional)
+# Checks every push and pull request. When `prod` moves, it also publishes the build as a GitHub release, tagged
+# prod-<date>-<commit>, with pebblelab.tar.gz attached. The server pulls it with deploy/pull.sh; nothing here can
+# reach the server, so the workflow holds no secrets.
 name: ci
 
 on:
   push:
     branches: [master, prod]
-    tags: ["prod", "prod-*", "prod/*"]
   pull_request:
   workflow_dispatch:
 
@@ -83,40 +76,27 @@ jobs:
           path: pebblelab.tar.gz
           retention-days: 14
 
-  deploy:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/prod' || startsWith(github.ref, 'refs/tags/prod'))
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
     needs: [test, build]
     runs-on: ubuntu-24.04
-    environment: production
-    permissions: {}
+    permissions:
+      contents: write
     concurrency:
-      group: deploy-production
+      group: release
       cancel-in-progress: false
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pebblelab
-      - name: deploy
+      - name: tag and publish
         env:
-          KEY: ${{ secrets.VPS_SSH_KEY }}
-          # not secret on their own, so these may be environment variables instead
-          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS || vars.VPS_KNOWN_HOSTS }}
-          HOST: ${{ secrets.VPS_HOST || vars.VPS_HOST }}
-          USER: ${{ secrets.VPS_USER || vars.VPS_USER }}
-          PORT: ${{ secrets.VPS_PORT || vars.VPS_PORT || '22' }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          missing=""
-          for v in KEY:VPS_SSH_KEY KNOWN_HOSTS:VPS_KNOWN_HOSTS HOST:VPS_HOST USER:VPS_USER; do
-            name=${v%%:*}
-            [ -n "${!name}" ] || missing="$missing ${v#*:}"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::not set for the production environment:$missing. Add them under Settings > Environments > production (environment secrets), not as repository variables."
-            exit 1
-          fi
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          # the server's authorized_keys runs release.sh for this key whatever is asked; the revision is its argument
-          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p "$PORT" "$USER@$HOST" "${GITHUB_SHA::12}" < pebblelab.tar.gz
-          rm -f ~/.ssh/id_deploy
+          tag="prod-$(date -u +%Y%m%d-%H%M)-${GITHUB_SHA::7}"
+          sha256sum pebblelab.tar.gz > pebblelab.tar.gz.sha256
+          gh release create "$tag" pebblelab.tar.gz pebblelab.tar.gz.sha256 \
+            --target "$GITHUB_SHA" --title "$tag" --latest \
+            --notes "Build of ${GITHUB_SHA}. On the server: ~/apps/pebblelab/pull.sh $tag (or with no tag for the latest)."
+          echo "released $tag" >> "$GITHUB_STEP_SUMMARY"
