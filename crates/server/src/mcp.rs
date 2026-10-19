@@ -44,11 +44,15 @@ fn tools() -> Value {
          "loan_total": amount, "rate": {"type": "number"}, "tenure": id, "start": s, "emi": amount, "emi_day": id,
          "invest_kind": {"type": "string", "enum": invest_kinds}, "invested": amount, "sip": amount, "sip_day": id,
          "asset_id": {"type": "integer", "description": "investment only: one of your assets (see list_assets) this stands for; its value is the balance"}}}},
-      {"name": "update_account", "description": "Rename, archive, change visibility or owners, set the current balance (history is kept), or change details such as a credit limit or a loan's terms. Only owners can.",
+      {"name": "update_account", "description": "Rename, archive, change visibility or owners, set the current balance (history is kept; on a reconciled account the difference is added as a balance adjustment dated today), or change details such as a credit limit or a loan's terms. Only owners can.",
        "inputSchema": {"type": "object", "required": ["account_id"], "properties": {
          "account_id": id, "name": s, "archived": {"type": "boolean"}, "visibility": {"type": "string", "enum": ["private", "shared"]},
          "owner_ids": {"type": "array", "items": id}, "balance": amount, "limit": amount, "due_day": id, "emi": amount, "invested": amount, "sip": amount, "sip_day": id,
          "asset_id": {"type": ["integer", "null"], "description": "link an investment to one of your assets, or null to unlink it (it keeps the value it had)"}}}},
+      {"name": "reconcile_account", "description": "Mark an account as matched to its statement up to a date. Give the statement's balance and it is checked first: if the transactions do not add up to it, nothing is saved and the answer says by how much. After this, nothing dated on or before that date can be added, changed or deleted on the account; a correction is a new transaction dated after it. Only owners can; reopening the dates is done in the app.",
+       "inputSchema": {"type": "object", "required": ["account_id", "through"], "properties": {
+         "account_id": id, "through": {"type": "string", "description": "the statement's date, YYYY-MM-DD"},
+         "balance": {"type": ["string", "number"], "description": "the statement's closing balance in major units (owed, for a card)"}}}},
       {"name": "list_transactions", "description": "Search transactions you can see, newest first, with a total for paging. accounts is a comma separated list of account ids; kinds is debit, credit and/or transfer; tags matches any.",
        "inputSchema": {"type": "object", "properties": {
          "q": {"type": "string", "description": "substring of description, party, note or a tag"}, "account_id": id, "accounts": s, "member_id": id,
@@ -61,10 +65,10 @@ fn tools() -> Value {
       {"name": "transfer_money", "description": format!("Move money between two accounts as two linked transactions (pay a card or loan, fund an investment, top up savings). Both balances update. {NOTE}"),
        "inputSchema": {"type": "object", "required": ["from_account_id", "to_account_id", "amount"], "properties": {
          "from_account_id": id, "to_account_id": id, "amount": amount, "description": s, "tags": tags, "note": s, "date": date}}},
-      {"name": "update_transaction", "description": "Edit a transaction; for a transfer both legs change. Pass a positive amount: the direction stays.",
+      {"name": "update_transaction", "description": "Edit a transaction; for a transfer both legs change. Pass a positive amount: the direction stays. On a reconciled date (see the account's `reconciled`) the amount, date and account cannot change; description, party, tags and note can.",
        "inputSchema": {"type": "object", "required": ["transaction_id"], "properties": {
          "transaction_id": id, "amount": amount, "description": s, "party": s, "tags": tags, "note": s, "date": date, "account_id": id}}},
-      {"name": "delete_transaction", "description": "Delete a transaction (both legs if it is a transfer).",
+      {"name": "delete_transaction", "description": "Delete a transaction (both legs if it is a transfer). Refused on a reconciled date: add a correction dated after it instead.",
        "inputSchema": {"type": "object", "required": ["transaction_id"], "properties": {"transaction_id": id}}},
       {"name": "list_subscriptions", "description": format!("List your subscriptions: standing charges on an account. When a renewal date arrives a transaction is added and the date moves on a month or a year. {NOTE}"),
        "inputSchema": {"type": "object", "properties": {}}},
@@ -144,6 +148,10 @@ async fn call_tool(s: &Store, c: &Caller, name: &str, a: Value) -> Result<Value,
         "update_account" => {
             let r: AccountRef<UpdateAccount> = args(a)?;
             out(s.update_account(c, r.account_id, r.rest).await?)
+        }
+        "reconcile_account" => {
+            let r: AccountRef<Reconcile> = args(a)?;
+            out(s.reconcile_account(c, r.account_id, r.rest).await?)
         }
         "list_transactions" => out(s.transactions(c, args(a)?).await?),
         "add_transaction" => out(s.add_transaction(c, args(a)?).await?),

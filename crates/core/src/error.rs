@@ -44,6 +44,10 @@ impl From<sqlx::Error> for Error {
             if db.is_unique_violation() {
                 return Error::Conflict("already exists".into());
             }
+            // raised by the reconciled-period guards (migration 0011)
+            if db.code().as_deref() == Some("PBL01") {
+                return Error::BadRequest(db.message().to_string());
+            }
         }
         tracing::error!("database error: {e}");
         Error::Internal("database error".into())

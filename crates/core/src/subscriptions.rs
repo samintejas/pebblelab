@@ -179,10 +179,16 @@ impl Store {
         if !tags.iter().any(|t| t == "subscription") {
             tags.push("subscription".into());
         }
+        // a renewal on a reconciled date was not on the statement, so it is not added
+        let shut: Option<String> = sqlx::query("SELECT reconciled_through FROM accounts WHERE id = $1").bind(s.account_id).fetch_optional(&mut *db).await?.and_then(|r| r.get(0));
         let (mut at, mut last) = (first, None);
         for _ in 0..CATCH_UP {
             if at.to_string().as_str() > now {
                 break;
+            }
+            if shut.as_deref().is_some_and(|d| at.to_string().as_str() <= d) {
+                at = step(at, s.cycle, anchor);
+                continue;
             }
             let tx: i64 = sqlx::query(
                 "INSERT INTO transactions (account_id, kind, amount, date, description, note, created_by) VALUES ($1,'debit',$2,$3,$4,$5,$6) RETURNING id",
