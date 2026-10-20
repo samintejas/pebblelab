@@ -335,6 +335,7 @@ impl Store {
     /// Cannot be undone.
     pub async fn delete_account(&self, c: &Caller, id: i64) -> Result<()> {
         c.need("edit")?;
+        c.need_person("delete an account")?;
         let mut db = self.pool.begin().await?;
         self.lock_account(&mut db, id).await?;
         let a = self.owned_account(c, id).await?;
@@ -349,6 +350,7 @@ impl Store {
     /// Take the caller off an account they co-own. The others keep it, with its history.
     pub async fn leave_account(&self, c: &Caller, id: i64) -> Result<()> {
         c.need("edit")?;
+        c.need_person("take you off an account")?;
         let mut db = self.pool.begin().await?;
         self.lock_account(&mut db, id).await?;
         let a = self.owned_account(c, id).await?;
@@ -385,6 +387,18 @@ impl Store {
         self.lock_account(&mut db, id).await?;
         let a = self.owned_account(c, id).await?;
         // check everything that can be refused before changing anything
+        let mut sharing = b.visibility.is_some_and(|v| v != a.visibility);
+        if let Some(ids) = &b.owner_ids {
+            let mut now: Vec<i64> = a.owners.iter().map(|o| o.id).collect();
+            let mut want: Vec<i64> = ids.iter().copied().chain([c.user_id]).collect();
+            now.sort_unstable();
+            want.sort_unstable();
+            want.dedup();
+            sharing |= now != want;
+        }
+        if sharing {
+            c.need_person("change who sees an account")?;
+        }
         let name = match &b.name {
             Some(n) if clean(n).is_empty() => return Err(Error::bad("name the account")),
             Some(n) => Some(clean(n).to_lowercase()),
@@ -567,6 +581,7 @@ impl Store {
     /// Open every date of an account again.
     pub async fn clear_reconciliation(&self, c: &Caller, id: i64) -> Result<Account> {
         c.need("edit")?;
+        c.need_person("reopen reconciled dates")?;
         let mut db = self.pool.begin().await?;
         self.lock_account(&mut db, id).await?;
         self.owned_account(c, id).await?;

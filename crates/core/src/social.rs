@@ -203,6 +203,7 @@ impl Store {
 
     /// How the caller signs in, and where they are signed in. `token` is the one this request came with.
     pub async fn security(&self, c: &Caller, token: &str) -> Result<Security> {
+        c.need_person("see where you are signed in")?;
         let me = crate::auth::hash_token(token);
         let methods = sqlx::query("SELECT provider, email, created_at FROM identities WHERE user_id = $1 ORDER BY provider")
             .bind(c.user_id)
@@ -223,6 +224,7 @@ impl Store {
 
     /// Sign out one of the caller's own sessions.
     pub async fn end_session(&self, c: &Caller, id: i64) -> Result<()> {
+        c.need_person("sign you out")?;
         let n = sqlx::query("DELETE FROM tokens WHERE id = $1 AND user_id = $2 AND kind = 'session'").bind(id).bind(c.user_id).execute(&self.pool).await?.rows_affected();
         if n == 0 { Err(Error::NotFound("session")) } else { Ok(()) }
     }

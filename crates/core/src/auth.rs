@@ -207,6 +207,9 @@ impl Store {
 
     pub async fn update_profile(&self, c: &Caller, b: UpdateProfile) -> Result<User> {
         c.need("edit")?;
+        // the email is how the account is recovered and matched to google or github: a token that could change it
+        // could take the account
+        c.need_person("change your profile")?;
         let u = self.user(c.user_id).await?;
         let name = b.name.map(|n| clean(&n).to_lowercase()).unwrap_or(u.name.clone());
         if name.is_empty() {
@@ -258,6 +261,7 @@ impl Store {
 
     pub async fn change_password(&self, c: &Caller, b: ChangePassword) -> Result<()> {
         c.need("edit")?;
+        c.need_person("change the password")?;
         check_password(&b.new)?;
         let hash: String = sqlx::query("SELECT password_hash FROM users WHERE id = $1")
             .bind(c.user_id)
@@ -289,6 +293,7 @@ impl Store {
 
     pub async fn create_connector(&self, c: &Caller, b: NewConnector) -> Result<CreatedConnector> {
         c.need("edit")?;
+        c.need_person("make connectors")?;
         let name = clean(&b.name);
         if name.is_empty() {
             return Err(Error::bad("name the connector"));
@@ -312,6 +317,7 @@ impl Store {
     }
 
     pub async fn connectors(&self, c: &Caller) -> Result<Vec<Connector>> {
+        c.need_person("see your connectors")?;
         let rows = sqlx::query("SELECT id, name, scopes, tail, created_at, last_used_at FROM tokens WHERE user_id = $1 AND kind = 'connector' ORDER BY id")
             .bind(c.user_id)
             .fetch_all(&self.pool)
@@ -332,6 +338,7 @@ impl Store {
     /// Change what a connector token may do, without making a new token.
     pub async fn update_connector(&self, c: &Caller, id: i64, b: UpdateConnector) -> Result<Connector> {
         c.need("edit")?;
+        c.need_person("change connectors")?;
         if let Some(bad) = b.scopes.iter().find(|s| !SCOPES.contains(&s.as_str())) {
             return Err(Error::bad(format!("unknown scope '{bad}', use one of {SCOPES:?}")));
         }
@@ -350,6 +357,7 @@ impl Store {
 
     /// Sign out everywhere, this device included. Connector tokens keep working.
     pub async fn sign_out_all(&self, c: &Caller) -> Result<()> {
+        c.need_person("sign you out")?;
         sqlx::query("DELETE FROM tokens WHERE user_id = $1 AND kind = 'session'").bind(c.user_id).execute(&self.pool).await?;
         Ok(())
     }
@@ -359,6 +367,7 @@ impl Store {
     /// All or nothing. Cannot be undone.
     pub async fn delete_user(&self, c: &Caller, password: &str) -> Result<()> {
         c.need("edit")?;
+        c.need_person("delete the account")?;
         let hash: String = sqlx::query("SELECT password_hash FROM users WHERE id = $1").bind(c.user_id).fetch_one(&self.pool).await?.get(0);
         if !verify_password(password, &hash) {
             return Err(Error::Forbidden("password is wrong".into()));
@@ -406,6 +415,7 @@ impl Store {
 
     pub async fn revoke_connector(&self, c: &Caller, id: i64) -> Result<()> {
         c.need("edit")?;
+        c.need_person("remove connectors")?;
         let n = sqlx::query("DELETE FROM tokens WHERE id = $1 AND user_id = $2 AND kind = 'connector'")
             .bind(id)
             .bind(c.user_id)

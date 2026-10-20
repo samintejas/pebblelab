@@ -44,10 +44,10 @@ fn tools() -> Value {
          "loan_total": amount, "rate": {"type": "number"}, "tenure": id, "start": s, "emi": amount, "emi_day": id,
          "invest_kind": {"type": "string", "enum": invest_kinds}, "invested": amount, "sip": amount, "sip_day": id,
          "asset_id": {"type": "integer", "description": "investment only: one of your assets (see list_assets) this stands for; its value is the balance"}}}},
-      {"name": "update_account", "description": "Rename, archive, change visibility or owners, set the current balance (history is kept; on a reconciled account the difference is added as a balance adjustment dated today), or change details such as a credit limit or a loan's terms. Only owners can.",
+      {"name": "update_account", "description": "Rename, archive, set the current balance (history is kept; on a reconciled account the difference is added as a balance adjustment dated today), or change details such as a credit limit or a loan's terms. Only owners can. Who sees an account (sharing with the family, co-owners) is changed in the app, not here.",
        "inputSchema": {"type": "object", "required": ["account_id"], "properties": {
-         "account_id": id, "name": s, "archived": {"type": "boolean"}, "visibility": {"type": "string", "enum": ["private", "shared"]},
-         "owner_ids": {"type": "array", "items": id}, "balance": amount, "limit": amount, "due_day": id, "emi": amount, "invested": amount, "sip": amount, "sip_day": id,
+         "account_id": id, "name": s, "archived": {"type": "boolean"},
+         "balance": amount, "limit": amount, "due_day": id, "emi": amount, "invested": amount, "sip": amount, "sip_day": id,
          "asset_id": {"type": ["integer", "null"], "description": "link an investment to one of your assets, or null to unlink it (it keeps the value it had)"}}}},
       {"name": "reconcile_account", "description": "Mark an account as matched to its statement up to a date. Give the statement's balance and it is checked first: if the transactions do not add up to it, nothing is saved and the answer says by how much. After this, nothing dated on or before that date can be added, changed or deleted on the account; a correction is a new transaction dated after it. Only owners can; reopening the dates is done in the app.",
        "inputSchema": {"type": "object", "required": ["account_id", "through"], "properties": {

@@ -88,6 +88,16 @@ impl Caller {
         }
     }
 
+    /// Only a person signed in may do this. A connector token works on the money it was given scopes for; it can
+    /// never change the account itself, who sees what, or the tokens, whatever its scopes.
+    pub fn need_person(&self, what: &str) -> Result<()> {
+        if self.interactive {
+            Ok(())
+        } else {
+            Err(Error::Forbidden(format!("a connector cannot {what}: do it in the app")))
+        }
+    }
+
     pub fn scopes(&self) -> &[String] {
         &self.scopes
     }
