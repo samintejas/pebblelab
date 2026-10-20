@@ -584,6 +584,23 @@ pub struct Insights {
     pub loans: Vec<Account>,
     pub investments: Vec<Account>,
     pub accounts: Vec<Account>,
+    /// What was owned and owed at the end of each of the last twelve months, oldest first; the last is today.
+    #[serde(default)]
+    pub net_worth: Vec<NetPoint>,
+}
+
+/// Net worth at the end of a month, worked back from today's balances through the transactions since. A loan
+/// follows its schedule; an investment that stands for an asset, and things you own, keep today's value (from the
+/// month they were bought, when that is known). An account counts from its first month: when it was added, or its
+/// first transaction if earlier.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NetPoint {
+    /// `YYYY-MM`
+    pub month: String,
+    #[serde(with = "money::val")]
+    pub own: i64,
+    #[serde(with = "money::val")]
+    pub owe: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -681,6 +698,41 @@ pub struct UpdateSubscription {
     pub account_id: Option<i64>,
     pub tag: Option<String>,
     pub active: Option<bool>,
+}
+
+// ---- budgets -------------------------------------------------------------------------------------------
+
+/// A monthly limit on one tag, with how much of it a month has used.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Budget {
+    pub id: i64,
+    pub tag: String,
+    /// The limit for a month.
+    #[serde(with = "money::val")]
+    pub amount: i64,
+    /// `YYYY-MM`: the month `spent` is for.
+    pub month: String,
+    /// Money out with this tag in that month, less refunds with it, on the accounts you can see. Transfers
+    /// never count. Above `amount` means over.
+    #[serde(with = "money::val")]
+    pub spent: i64,
+    /// The same for the month before, to compare.
+    #[serde(with = "money::val")]
+    pub last_month: i64,
+}
+
+/// Set the monthly limit on a tag: a new budget, or a new amount for the one the tag already has.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SetBudget {
+    pub tag: String,
+    #[serde(with = "money::val")]
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BudgetQuery {
+    /// `YYYY-MM`; this month when left out.
+    pub month: Option<String>,
 }
 
 // ---- assets --------------------------------------------------------------------------------------------

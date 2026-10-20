@@ -1,6 +1,7 @@
 mod accounts;
 mod assets;
 mod auth;
+mod budgets;
 pub mod connect;
 pub mod hub;
 mod insights;
@@ -13,6 +14,7 @@ mod transactions;
 
 pub use accounts::{AccountPage, Accounts, NewAccount};
 pub use assets::{AssetPanel, Assets};
+pub use budgets::Budgets;
 pub use auth::{AuthCallback, Reset, SignIn, SignUp};
 pub use insights::Insights;
 pub use landing::Landing;

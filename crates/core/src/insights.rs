@@ -147,7 +147,10 @@ impl Store {
         }
         dues.sort_by(|a, b| a.date.cmp(&b.date));
 
+        let net_worth = self.net_history(c.user_id, &accounts, q.member_id.is_none_or(|m| m == c.user_id), now).await?;
+
         Ok(Insights {
+            net_worth,
             assets,
             owed,
             income,
@@ -161,6 +164,73 @@ impl Store {
             investments: accounts.iter().filter(|a| a.kind == AccountKind::Investment).cloned().collect(),
             accounts,
         })
+    }
+
+    /// Net worth at each of the last twelve month ends (see [`NetPoint`]).
+    async fn net_history(&self, user_id: i64, accounts: &[Account], with_things: bool, now: NaiveDate) -> Result<Vec<NetPoint>> {
+        let mut ends: Vec<NaiveDate> = Vec::new();
+        let mut d = now;
+        for _ in 0..12 {
+            ends.push(d);
+            d = NaiveDate::from_ymd_opt(d.year(), d.month(), 1).unwrap() - Duration::days(1);
+        }
+        ends.reverse();
+        let ids: Vec<i64> = accounts.iter().map(|a| a.id).collect();
+        // money moved after each month end, per account: today's balance less it is the balance then
+        let sums = sqlx::query("SELECT account_id, substr(date, 1, 7) AS ym, SUM(amount)::BIGINT AS s FROM transactions WHERE account_id = ANY($1) AND date > $2 GROUP BY 1, 2")
+            .bind(&ids)
+            .bind(ends[0].to_string())
+            .fetch_all(&self.pool)
+            .await?;
+        let born = sqlx::query("SELECT a.id, LEAST(substr(a.created_at, 1, 7), COALESCE((SELECT MIN(substr(t.date, 1, 7)) FROM transactions t WHERE t.account_id = a.id), '9999-12')) FROM accounts a WHERE a.id = ANY($1)")
+            .bind(&ids)
+            .fetch_all(&self.pool)
+            .await?;
+        let things: Vec<(String, i64)> = if with_things {
+            sqlx::query("SELECT s.bought, s.value FROM assets s WHERE s.user_id = $1 AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.asset_id = s.id AND a.archived = 0)")
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?
+                .iter()
+                .map(|r| (r.get(0), r.get(1)))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Ok(ends
+            .iter()
+            .map(|end| {
+                let ym = month_key(*end);
+                let (mut own, mut owe) = (0i64, 0i64);
+                for a in accounts {
+                    let first: String = born.iter().find(|r| r.get::<i64, _>(0) == a.id).map(|r| r.get(1)).unwrap_or_default();
+                    let value = match (&a.kind, &a.asset) {
+                        (AccountKind::Loan, _) => {
+                            let d = &a.details;
+                            let start = d.start.as_deref().unwrap_or("");
+                            if start > ym.as_str() {
+                                continue;
+                            }
+                            pebblelab_api::loan::compute(d.loan_total.unwrap_or(0), d.rate.unwrap_or(0.0), d.tenure.unwrap_or(0), start, d.emi, (end.year(), end.month())).map(|l| l.balance).unwrap_or(0)
+                        }
+                        _ if first.as_str() > ym.as_str() => continue,
+                        (_, Some(_)) => a.balance,
+                        (kind, None) => {
+                            let after: i64 = sums.iter().filter(|r| r.get::<i64, _>(0) == a.id && r.get::<String, _>(1) > ym).map(|r| r.get::<i64, _>(2)).sum();
+                            // a card shows what is owed, the opposite sign of its sum
+                            if *kind == AccountKind::Credit { a.balance + after } else { a.balance - after }
+                        }
+                    };
+                    if a.kind.is_liability() {
+                        owe += value;
+                    } else {
+                        own += value;
+                    }
+                }
+                own += things.iter().filter(|(bought, _)| bought.is_empty() || bought.as_str() <= ym.as_str()).map(|(_, v)| v).sum::<i64>();
+                NetPoint { month: ym, own, owe }
+            })
+            .collect())
     }
 
     /// "ask pebblelab": answers a plain question from the caller's own data. Rule based on purpose: it only

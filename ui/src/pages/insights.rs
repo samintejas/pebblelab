@@ -89,6 +89,26 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
         (fmt::pct(m.income - m.spending, m.income), fmt::month(&m.month), title)
     }).collect::<Vec<_>>();
 
+    // ---- net worth: a year of month ends, from the first month anything was tracked
+    let nets: Vec<(String, i64)> = i.net_worth.iter().skip_while(|p| p.own == 0 && p.owe == 0).map(|p| (p.month.clone(), p.own - p.owe)).collect();
+    let (nw_lo, nw_hi) = (nets.iter().map(|p| p.1).min().unwrap_or(0), nets.iter().map(|p| p.1).max().unwrap_or(0));
+    let span = (nw_hi - nw_lo).max(1) as f64;
+    let nn = nets.len().max(2);
+    let nw_pts: Vec<(i64, i64)> = nets.iter().enumerate().map(|(k, p)| ((k as f64 * 300.0 / (nn - 1) as f64).round() as i64, (100.0 - (p.1 - nw_lo) as f64 / span * 85.0).round() as i64)).collect();
+    let nw_line = line(&nw_pts);
+    let nw_area = match (nw_pts.first(), nw_pts.last()) {
+        (Some((x0, _)), Some((x1, _))) => format!("{nw_line} L {x1} 105 L {x0} 105 Z"),
+        _ => String::new(),
+    };
+    let nw_now = nets.last().map(|p| p.1).unwrap_or(i.assets - i.owed);
+    let nw_change = match nets.first() {
+        Some((m, v)) if nets.len() > 1 => format!("{} {} since {}", if nw_now >= *v { "up" } else { "down" }, money((nw_now - v).abs()), fmt::month_year(m)),
+        _ => "the line grows as months go by".to_string(),
+    };
+    let nw_aria = nets.iter().map(|(m, v)| format!("{}: {}", fmt::month_year(m), app.signed(*v))).collect::<Vec<_>>().join(". ");
+    let nw_marks: Vec<(String, String)> = nets.iter().map(|(m, v)| (fmt::month(m), format!("{}: {}", fmt::month_year(m), app.signed(*v)))).collect();
+    let chart = RwSignal::new("flow".to_string());
+
     // ---- what you own and owe: one bar, solid for what you hold, striped for what you owe
     let hold = |f: &dyn Fn(&Account) -> bool| i.accounts.iter().filter(|a| f(a)).map(|a| a.balance).sum::<i64>();
     let whole = i.assets + i.owed;
@@ -149,8 +169,37 @@ fn Dash(i: Insights, scope_label: String) -> impl IntoView {
     view! {
         <div class="dash">
             <section class="d-card" aria-labelledby="c-flow" style="grid-column:1 / -1">
-                <header class="d-card__head"><h2 class="d-card__title" id="c-flow">"cash flow"</h2><span class="d-card__meta">{format!("6 months · {scope_label}")}</span></header>
-                <div class="d-card__body" style="display:flex;flex-wrap:wrap;gap:16px 32px;align-items:stretch">
+                <header class="d-card__head">
+                    <h2 class="d-card__title" id="c-flow">{move || if chart.get() == "net" { "net worth" } else { "cash flow" }}</h2>
+                    <span class="d-card__meta d-row" style="gap:12px">
+                        <span class="ins-scope">{move || if chart.get() == "net" { format!("12 months · {scope_label}") } else { format!("6 months · {scope_label}") }}</span>
+                        <Segmented value=chart label="chart">
+                            <SegOption value="flow">"cash flow"</SegOption>
+                            <SegOption value="net">"net worth"</SegOption>
+                        </Segmented>
+                    </span>
+                </header>
+                {move || (chart.get() == "net").then(|| view! {
+                    <div class="d-card__body" style="display:flex;flex-wrap:wrap;gap:16px 32px;align-items:stretch">
+                        <div style="flex:0 1 200px;display:flex;flex-direction:column;gap:4px;justify-content:center">
+                            <span style="color:var(--text-secondary)">"net worth now"</span>
+                            <span class="heading-3xl" style="color:var(--text-max)">{app.signed(nw_now)}</span>
+                            <span>{nw_change.clone()}</span>
+                            <span style="margin-top:8px;color:var(--text-secondary);font-size:var(--font-size-xs)">"what you own less what you owe, at each month end"</span>
+                        </div>
+                        <div style="flex:1 1 420px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px">
+                            <svg viewBox="0 0 300 110" preserveAspectRatio="none" role="img" aria-label=nw_aria.clone() style="flex:1 1 0;min-height:72px;width:100%;overflow:visible">
+                                <path d="M 0 105 H 300 M 0 57 H 300 M 0 10 H 300" fill="none" stroke="var(--border-default)" stroke-width="1" stroke-dasharray="2 4" vector-effect="non-scaling-stroke"></path>
+                                <path d=nw_area.clone() fill="var(--accent-primary-subtle)"></path>
+                                <path class="ins-line" d=nw_line.clone() fill="none" stroke="var(--text-strong)" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+                            </svg>
+                            <div style="display:flex;justify-content:space-between;font-size:var(--font-size-xs);color:var(--text-secondary)">
+                                {nw_marks.clone().into_iter().map(|(label, title)| view! { <span title=title>{label}</span> }).collect_view()}
+                            </div>
+                        </div>
+                    </div>
+                })}
+                <div class="d-card__body" style=move || if chart.get() == "net" { "display:none" } else { "display:flex;flex-wrap:wrap;gap:16px 32px;align-items:stretch" }>
                     <div style="flex:0 1 200px;display:flex;flex-direction:column;gap:4px;justify-content:center">
                         <span style="color:var(--text-secondary)">{format!("kept in {last_label}")}</span>
                         <span class="heading-3xl" style="color:var(--text-max)">{last_kept}</span>

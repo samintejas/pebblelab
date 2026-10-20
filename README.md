@@ -123,14 +123,14 @@ pebblelab token create claude --scopes read,transactions,add
 at `POST /api/auth/signin` for a session token, or create a connector token (profile, connectors).
 Routes: `auth/{signup,signin,signout,signout-all,reset,reset/confirm,providers,redeem}`, `auth/{google,github}/{start,callback}`, `me` (also delete), `me/password`, `export.csv`,
 `family` (create, delete), `family/{invite,join,leave}`, `accounts` (and `accounts/{id}/leave`, `accounts/{id}/reconcile` post and delete), `transactions` (filter, sort, page, in/out
-totals), `transfers`, `transactions/{id}/attachments`, `subscriptions`, `assets`, `tags`, `insights`, `ask`, `notifications`, `connectors`.
+totals), `transfers`, `transactions/{id}/attachments`, `subscriptions`, `budgets` (get with `?month=YYYY-MM`, post sets a tag's monthly limit, delete), `assets`, `tags`, `insights` (with `net_worth`, twelve month ends), `ask`, `notifications`, `connectors`.
 
 ## mcp
 
 `POST /mcp` (streamable HTTP, bearer token) or `pebblelab mcp` on stdio (`PEBBLELAB_TOKEN`, and `PEBBLELAB_DB` if not the default).
 Tools: `list_accounts`, `create_account`, `update_account`, `reconcile_account`, `list_transactions`, `add_transaction`,
 `transfer_money`, `update_transaction`, `delete_transaction`, `list_subscriptions`, `add_subscription`, `update_subscription`, `delete_subscription`, `list_assets`, `add_asset`,
-`update_asset`, `delete_asset`, `list_tags`, `get_insights`, `ask_pebblelab`.
+`update_asset`, `delete_asset`, `list_budgets`, `set_budget`, `delete_budget`, `list_tags`, `get_insights`, `ask_pebblelab`.
 A token has scopes: `read`, `transactions` (read them), `add`, `edit`; a tool outside them reports the missing scope.
 Whatever its scopes, a token (a connector, or `PEBBLELAB_TOKEN`) only works on the money: the profile and email, the
 password, sessions, connectors, the family, who sees an account, deleting an account and reopening reconciled dates are

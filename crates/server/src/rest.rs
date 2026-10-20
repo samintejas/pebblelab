@@ -131,6 +131,8 @@ pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oau
         .route("/transfers", post(transfer))
         .route("/subscriptions", get(subscriptions).post(add_subscription))
         .route("/subscriptions/{id}", axum::routing::patch(update_subscription).delete(delete_subscription))
+        .route("/budgets", get(budgets).post(set_budget))
+        .route("/budgets/{id}", delete(delete_budget))
         .route("/assets", get(assets).post(add_asset))
         .route("/assets/{id}", axum::routing::patch(update_asset).delete(delete_asset))
         .route("/tags", get(tags))
@@ -646,6 +648,19 @@ async fn create_connector(State(s): State<Store>, Auth(c, _): Auth, Json(b): Jso
 
 async fn revoke_connector(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>) -> R<Value> {
     s.revoke_connector(&c, id).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn budgets(State(s): State<Store>, Auth(c, _): Auth, Query(q): Query<BudgetQuery>) -> R<Vec<Budget>> {
+    Ok(Json(s.budgets(&c, q).await?))
+}
+
+async fn set_budget(State(s): State<Store>, Auth(c, _): Auth, Json(b): Json<SetBudget>) -> R<Budget> {
+    Ok(Json(s.set_budget(&c, b).await?))
+}
+
+async fn delete_budget(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>) -> R<Value> {
+    s.delete_budget(&c, id).await?;
     Ok(Json(json!({ "ok": true })))
 }
 
