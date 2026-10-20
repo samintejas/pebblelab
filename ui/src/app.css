@@ -77,3 +77,55 @@
 .sb__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sb__ctx { display: inline-flex !important; align-items: center; gap: 6px; }
 .sb__ctx::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-primary); }
+
+/* ---------- phones: the shell stacks under its breakpoint (data-mobile) ---------- */
+/* screens a thumb away; the sidebar is a drawer over the page; a side panel is the whole screen */
+.m-tabs { order: 6; flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid var(--border-default); background: var(--bg-base); }
+.m-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 56px; padding: 6px 4px; border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: var(--font-size-xs); text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m-tab span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-tab[aria-current] { color: var(--text-max); }
+.m-tab[aria-current] .d-icon { color: var(--accent-primary); }
+.m-tab:active { background: var(--bg-press); }
+.m-scrim { position: fixed; inset: 0; z-index: 390; background: rgb(0 0 0 / .45); }
+.d-shell[data-mobile] > .d-sidebar:not([inert]) { position: fixed; inset: 0 auto 0 0; z-index: 400; width: min(300px, 86vw); height: 100dvh; max-height: none; padding-bottom: env(safe-area-inset-bottom); border-right: 1px solid var(--border-default); }
+.d-shell[data-mobile] > .d-rightbar:not([inert]) { position: fixed; inset: 0; z-index: 450; width: 100%; height: 100dvh; max-height: none; display: flex; flex-direction: column; }
+.d-shell[data-mobile] > .d-rightbar > :not(dialog) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.d-shell[data-mobile] .d-rightbar__body { flex: 1; min-height: 0; overflow: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important; }
+/* inputs at 16px, or the phone zooms the page in when one is touched */
+.d-shell[data-mobile] :is(.d-input, .d-inputbar__input, .d-textarea, .d-taginput input, select) { font-size: max(16px, 1em); }
+/* the design system's 44px touch box sits on ::after, which the filter's chevron also uses: keep the chevron */
+@media (pointer: coarse) { .d-filter::after { position: static; top: auto; left: auto; width: 12px; height: 12px; transform: none; } .d-filter { min-height: 44px; } .d-filter[aria-expanded="true"]::after { transform: rotate(180deg); } }
+
+/* transactions on a phone: a list instead of the table, and the add bar behind a button */
+/* filters fold behind one button on a phone; the search and what is active stay out */
+.tx-filters[data-collapsed] .d-filterbar > :not(.d-filterbar__search, .tx-filters__toggle, .d-filterbar__active) { display: none; }
+.d-shell[data-mobile] .d-filterbar__search { flex: 1 1 calc(100% - 140px); max-width: none; min-width: 0; }
+.tx-filters__toggle { height: 44px; }
+.tx-add { display: flex; flex-direction: column; gap: 8px; }
+.tx-add-open { align-self: stretch; height: 44px; }
+.d-shell[data-mobile] .d-inputbar > .d-btn { flex: 1 0 100%; min-height: 48px; }
+.tx-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); overflow: hidden; }
+.tx-list > li + li { border-top: 1px solid var(--border-subtle); }
+.tx-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; width: 100%; padding: 12px 16px; border: 0; background: none; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tx-item:active, .tx-item[aria-current] { background: var(--bg-hover); }
+.tx-item__desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-strong); }
+.tx-item__amt { color: var(--text-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tx-item__amt[data-in] { color: var(--accent-success); }
+.tx-item__meta { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--text-secondary); font-size: var(--font-size-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-item__tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.tx-item__tags:empty { display: none; }
+
+/* every other table on a phone: each row a card, the first cell and the amount on top, the rest under them */
+.d-shell[data-mobile] .d-table-wrap { overflow: visible; }
+.d-shell[data-mobile] .d-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.d-shell[data-mobile] .d-table, .d-shell[data-mobile] .d-table tbody { display: block; width: 100%; }
+.d-shell[data-mobile] .d-table tbody tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 12px 16px; border-top: 1px solid var(--border-subtle); }
+.d-shell[data-mobile] .d-table tbody tr:first-child { border-top: 0; }
+.d-shell[data-mobile] .d-table tbody tr::after { content: ""; order: 2; flex-basis: 100%; height: 0; }
+.d-shell[data-mobile] .d-table tbody td { display: block; order: 3; height: auto; padding: 0; border: 0; color: var(--text-secondary); font-size: var(--font-size-sm); }
+.d-shell[data-mobile] .d-table tbody td:first-child { order: 1; flex: 1 1 0; min-width: 0; color: var(--text-strong); font-size: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-shell[data-mobile] .d-table tbody td.d-num { order: 1; margin-left: auto; color: var(--text-strong); font-size: inherit; white-space: nowrap; }
+.d-shell[data-mobile] .d-table tbody td:not(:first-child):not(.d-num):not(:nth-child(2))::before { content: "· "; }
+/* settings on a phone: its sections in one row that scrolls sideways */
+.d-shell[data-mobile] .set > .d-secnav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 8px; }
+.d-shell[data-mobile] .set > .d-secnav > * { flex: none; }

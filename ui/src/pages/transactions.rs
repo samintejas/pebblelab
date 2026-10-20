@@ -67,6 +67,11 @@ impl Quick {
 pub fn Transactions() -> impl IntoView {
     let app = expect_context::<AppState>();
     let quick = Quick::new();
+    let shell = use_shell();
+    // on a phone the add bar waits behind a button, so the list starts on the first screen
+    let adding = RwSignal::new(false);
+    let filters_open = RwSignal::new(false);
+    let mobile = Memo::new(move |_| shell.is_mobile());
 
     // filters
     let q = RwSignal::new(String::new());
@@ -187,9 +192,24 @@ pub fn Transactions() -> impl IntoView {
                     }.into_any()
                 } else {
                     view! {
-                        <QuickAdd quick=quick/>
+                        {move || if !mobile.get() || adding.get() {
+                            view! {
+                                <div class="tx-add">
+                                    <QuickAdd quick=quick/>
+                                    {move || mobile.get().then(|| view! { <Button variant=ButtonVariant::Ghost on:click=move |_| adding.set(false)>"done adding"</Button> })}
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! { <button type="button" class="d-btn d-btn--primary tx-add-open" on:click=move |_| { adding.set(true); quick.focus(); }><Ico d=PLUS/>"add transaction"</button> }.into_any()
+                        }}
+                        <div class="tx-filters" data-collapsed=move || (mobile.get() && !filters_open.get()).then_some("")>
                         <FilterBar label="filters">
                             <FilterSearch label="search transactions" value=q placeholder="search description or tag"/>
+                            {move || mobile.get().then(|| view! {
+                                <button type="button" class="d-btn d-btn--secondary tx-filters__toggle" aria-expanded=move || filters_open.get().to_string() on:click=move |_| filters_open.update(|o| *o = !*o)>
+                                    "filters"{move || { let n = [!kinds.get().is_empty(), !accts.get().is_empty(), !tag_sel.get().is_empty(), !party_sel.get().is_empty(), !people.get().is_empty(), !from.get().is_empty() || !to.get().is_empty()].iter().filter(|b| **b).count(); (n > 0).then(|| view! { <span class="d-badge">{n}</span> }) }}
+                                </button>
+                            })}
                             <Filter label="type" options=kind_options selected=kinds/>
                             <Filter label="account" options=acct_options selected=accts/>
                             <Filter label="tags" options=tag_options selected=tag_sel/>
@@ -209,12 +229,13 @@ pub fn Transactions() -> impl IntoView {
                                 </FilterActive>
                             })}
                         </FilterBar>
+                        </div>
                         {move || match shown.get() {
                             None => view! { <EmptyLoading title="loading transactions"/> }.into_any(),
                             Some(Err(e)) => view! { <EmptyError title="could not load transactions" hint=e.message/> }.into_any(),
                             Some(Ok(p)) if p.items.is_empty() && !any_filter.get() => view! {
                                 <EmptyState title="no transactions yet" hint="type your first one in the bar above and press enter. start the amount with + for money in.">
-                                    <Button on:click=move |_| quick.focus()>"go to the bar"</Button>
+                                    <Button on:click=move |_| { adding.set(true); quick.focus(); }>"go to the bar"</Button>
                                 </EmptyState>
                             }.into_any(),
                             Some(Ok(p)) if p.items.is_empty() => view! {
@@ -222,6 +243,14 @@ pub fn Transactions() -> impl IntoView {
                                     <Button on:click=move |_| clear_all()>"clear filters"</Button>
                                 </EmptyState>
                             }.into_any(),
+                            Some(Ok(p)) if mobile.get() => {
+                                let fam = family.get();
+                                view! {
+                                    <ul class="tx-list" aria-label="transactions. select one to open it">
+                                        {p.items.into_iter().map(|t| view! { <MobileRow t=t family=fam/> }).collect_view()}
+                                    </ul>
+                                }.into_any()
+                            }
                             Some(Ok(p)) => {
                                 let cols = [th("date"), th("description"), th("tag"), th("account"), th("person"), th("amount")];
                                 let fam = family.get();
@@ -447,6 +476,44 @@ fn Row(t: Transaction, family: bool, quick: Quick) -> impl IntoView {
                 <button type="button" class="d-btn d-btn--ghost d-btn--icon d-btn--sm" aria-label=open_label title="open in the side panel" on:click=move |_| app.panel.set(Some(open.clone()))><Ico d=PANEL_RIGHT/></button>
             </td>
         </tr>
+    }
+}
+
+/// A transaction on a phone: what and how much on one line, when, where and its tags under it. A tap opens it.
+#[component]
+fn MobileRow(t: Transaction, family: bool) -> impl IntoView {
+    let app = expect_context::<AppState>();
+    let id = t.id;
+    let is_transfer = t.kind == TxKind::Transfer;
+    let desc = if t.description.is_empty() { "—".to_string() } else { t.description.clone() };
+    let account = match t.counterpart_id {
+        Some(c) if is_transfer => format!("{} → {}", app.account_name(t.account_id), app.account_name(c)),
+        _ => app.account_name(t.account_id),
+    };
+    let mut meta = vec![fmt::day(&t.date), account];
+    if family {
+        meta.push(t.created_by.name.split(' ').next().unwrap_or("").to_string());
+    }
+    let amount = format!("{}{}", if is_transfer { "" } else if t.amount > 0 { "+" } else { "−" }, app.money(t.amount));
+    let incoming = !is_transfer && t.amount > 0;
+    let locked = app.locked_by(&t).is_some();
+    let tags = t.tags.clone();
+    let open = t.clone();
+    view! {
+        <li>
+            <button type="button" class="tx-item" aria-current=move || app.panel.with(|p| p.as_ref().is_some_and(|p| p.id == id)).then_some("true")
+                on:click=move |_| app.panel.set(Some(open.clone()))>
+                <span class="tx-item__desc">{desc}</span>
+                <span class="tx-item__amt" data-in=incoming.then_some("")>{amount}</span>
+                <span class="tx-item__meta">
+                    {locked.then(|| view! { <span style="color:var(--text-secondary)"><Ico d=LOCK small=true/><span class="d-sr">"reconciled. "</span></span> })}
+                    {meta.join(" · ")}
+                </span>
+                <span class="tx-item__tags">
+                    {tags.into_iter().map(|g| { let c = tag_cat(&g); view! { <span class="d-badge" data-cat=c.to_string()>{g}</span> } }).collect_view()}
+                </span>
+            </button>
+        </li>
     }
 }
 

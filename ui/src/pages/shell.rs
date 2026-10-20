@@ -125,7 +125,10 @@ pub fn AppShell() -> impl IntoView {
                     <Notifications/>
                 </AppBar>
                 <Main><div class="page"><Outlet/></div></Main>
+                {move || shell.is_mobile().then(|| view! { <TabBar page=page/> })}
             </ShellMain>
+            // on a phone the sidebar is a drawer over the page: a tap beside it closes it
+            {move || (shell.is_mobile() && shell.is_open(Region::Left)).then(|| view! { <div class="m-scrim" aria-hidden="true" on:click=move |_| shell.set(Region::Left, false)></div> })}
             <aside class="d-rightbar" aria-label="details" inert=move || app.panel.get().is_none() && app.side.get().is_none()>
                 {move || app.panel.get().map(|t| view! { <TxPanel t=t/> })}
                 {move || app.side.get().map(|s| match s {
@@ -134,6 +137,32 @@ pub fn AppShell() -> impl IntoView {
                 })}
             </aside>
         </Shell>
+    }
+}
+
+/// On a phone: the screens used most, a thumb away, and the rest of the sidebar behind "more".
+#[component]
+fn TabBar(page: Memo<String>) -> impl IntoView {
+    let shell = use_shell();
+    let tab = move |href: &'static str, icon: &'static str, label: &'static str| {
+        let key = href.trim_start_matches('/');
+        view! {
+            <a class="m-tab" href=href aria-current=move || (page.get() == key).then_some("page")>
+                <Ico d=icon/><span>{label}</span>
+            </a>
+        }
+    };
+    let more_current = move || ["subscriptions", "assets", "settings"].contains(&page.get().as_str());
+    view! {
+        <nav class="m-tabs" aria-label="screens">
+            {tab("/transactions", SWAP, "transactions")}
+            {tab("/insights", DASHBOARD, "insights")}
+            {tab("/accounts", WALLET, "accounts")}
+            <button type="button" class="m-tab" aria-current=move || more_current().then_some("page")
+                aria-expanded=move || shell.is_open(Region::Left).to_string() on:click=move |_| shell.toggle(Region::Left)>
+                <Ico d=MENU/><span>"more"</span>
+            </button>
+        </nav>
     }
 }
 

@@ -44,7 +44,7 @@ for m in 5 4 3 2 1; do
   a tx transfer "salary account" "household joint" 45000 --date "$(d "$m months ago")"
   v tx transfer savings "household joint" 40000 --date "$(d "$m months ago")"
   v tx transfer savings "car loan" 16450 --date "$(d "$m months ago + 2 days")"
-  v tx transfer "household joint" "home loan" 24618 --date "$(d "$m months ago + 4 days")"
+  a tx transfer "household joint" "home loan" 24618 --date "$(d "$m months ago + 4 days")"
 done
 # the last few weeks, day by day
 a tx add "salary account" 142000 salary --in --tag income --date "$(d "4 days ago")"
@@ -52,7 +52,7 @@ v tx add savings 118000 salary --in --tag income --date "$(d "4 days ago")"
 a tx add "household joint" 18500 school fees --tag education --date "$(d "4 days ago")"
 a tx transfer "salary account" "household joint" 45000 --date "$(d "4 days ago")"
 v tx transfer savings "household joint" 40000 --date "$(d "4 days ago")"
-v tx transfer "household joint" "home loan" 24618
+a tx transfer "household joint" "home loan" 24618
 a tx add "household joint" 3240 groceries, weekly --tag groceries,household --date "$(d "1 day ago")"
 v tx add "card, vikram" 2100 fuel --tag transport --date "$(d "2 days ago")"
 v tx transfer savings "index fund" 10000 --date "$(d "3 days ago")"
