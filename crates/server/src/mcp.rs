@@ -11,7 +11,7 @@ const NOTE: &str = "Amounts are decimal numbers or strings in major units (e.g. 
 /// The scope a tool needs.
 fn scope_of(tool: &str) -> &'static str {
     match tool {
-        "list_accounts" | "list_subscriptions" | "list_assets" | "list_budgets" | "get_insights" | "ask_pebblelab" => "read",
+        "list_accounts" | "list_subscriptions" | "list_assets" | "list_budgets" | "get_insights" | "get_report" | "ask_pebblelab" => "read",
         "list_transactions" | "list_tags" => "transactions",
         "add_transaction" | "transfer_money" | "add_subscription" | "add_asset" | "set_budget" => "add",
         _ => "edit",
@@ -100,6 +100,8 @@ fn tools() -> Value {
        "inputSchema": {"type": "object", "properties": {}}},
       {"name": "get_insights", "description": format!("Money overview: assets (accounts plus things you own), what is owed, income and spending over a window, spending by category, six months of flow, upcoming dues, loans and investments. member_id looks at one person. {NOTE}"),
        "inputSchema": {"type": "object", "properties": {"member_id": id, "days": {"type": "integer", "description": "window for totals, default 30"}}}},
+      {"name": "get_report", "description": format!("A month in review: income and spending against the month before, spending by tag against the month before, the five biggest spends, how each budget held, and net worth at the start and end of the month. {NOTE}"),
+       "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "YYYY-MM, defaults to this month"}}}},
       {"name": "ask_pebblelab", "description": "Ask a plain question (loans ending, what is due, investments, net worth, spending on a tag) and get an answer computed from the data.",
        "inputSchema": {"type": "object", "required": ["question"], "properties": {"question": s}}}
     ])
@@ -206,6 +208,7 @@ async fn call_tool(s: &Store, c: &Caller, name: &str, a: Value) -> Result<Value,
         }
         "list_tags" => out(s.tags(c).await?.into_iter().map(|(tag, uses)| json!({"tag": tag, "uses": uses})).collect::<Vec<_>>()),
         "get_insights" => out(s.insights(c, args(a)?).await?),
+        "get_report" => out(s.report(c, args(a)?).await?),
         "ask_pebblelab" => out(json!({"answer": s.ask(c, &args::<Ask>(a)?.question).await?})),
         _ => Err(Error::bad(format!("unknown tool '{name}'"))),
     }

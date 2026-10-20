@@ -5,7 +5,7 @@ use crate::api::*;
 use crate::{Caller, Error, Result, Store, tags as norm_tags, visible};
 
 /// The first day of the month `YYYY-MM`.
-fn month_start(m: &str) -> Result<NaiveDate> {
+pub(crate) fn month_start(m: &str) -> Result<NaiveDate> {
     NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d").map_err(|_| Error::bad(format!("invalid month '{m}', expected YYYY-MM")))
 }
 

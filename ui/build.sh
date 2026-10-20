@@ -13,6 +13,7 @@ command -v wasm-opt >/dev/null && wasm-opt -Oz -o dist/pebblelab-ui_bg.wasm dist
 # the fonts ship inside the dots-ui crate; find wherever cargo unpacked it
 DOTS=$(cargo metadata --format-version 1 | grep -o '"manifest_path":"[^"]*/dots-ui\(-[0-9][^"]*\)\{0,1\}/Cargo.toml"' | head -1 | sed 's/.*:"\(.*\)\/Cargo.toml"/\1/')
 cp "$DOTS"/assets/fonts/*.woff2 dist/fonts/
+cp public/* dist/   # the icons and the manifest that make fin installable on a phone
 # cache-bust by content
 V=$(cat dist/pebblelab-ui_bg.wasm | cksum | cut -d' ' -f1)
 sed "s/__V__/$V/g" index.html > dist/index.html

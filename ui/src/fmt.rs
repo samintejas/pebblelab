@@ -53,6 +53,13 @@ pub fn days_ago(n: i32) -> String {
     format!("{:04}-{:02}-{:02}", d.get_full_year(), d.get_month() + 1, d.get_date())
 }
 
+/// `2026-10` moved by `by` months.
+pub fn shift_month(ym: &str, by: i32) -> String {
+    let (y, m) = (ym.get(..4).and_then(|y| y.parse::<i32>().ok()).unwrap_or(2000), ym.get(5..7).and_then(|m| m.parse::<i32>().ok()).unwrap_or(1));
+    let n = y * 12 + (m - 1) + by;
+    format!("{:04}-{:02}", n.div_euclid(12), n.rem_euclid(12) + 1)
+}
+
 /// `2034-03` to `mar 2034`.
 pub fn month_year(ym: &str) -> String {
     format!("{} {}", month(ym), ym.get(..4).unwrap_or(""))

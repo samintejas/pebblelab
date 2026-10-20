@@ -41,6 +41,7 @@ fn App() -> impl IntoView {
                         <Route path=path!("transactions") view=pages::Transactions/>
                         <Route path=path!("insights") view=pages::Insights/>
                         <Route path=path!("budgets") view=pages::Budgets/>
+                        <Route path=path!("report") view=pages::MonthReport/>
                         <Route path=path!("subscriptions") view=pages::Subscriptions/>
                         <Route path=path!("assets") view=pages::Assets/>
                         <Route path=path!("accounts") view=pages::Accounts/>

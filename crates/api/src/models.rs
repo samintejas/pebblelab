@@ -912,3 +912,59 @@ pub struct Security {
     pub methods: Vec<SignInMethod>,
     pub sessions: Vec<SessionInfo>,
 }
+
+/// One month, start to end: what came in and went out, where it went against the month before, the biggest
+/// spends, how the budgets held, and how net worth moved. Income and spending count as in [`Insights`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Report {
+    /// `YYYY-MM`
+    pub month: String,
+    #[serde(with = "money::val")]
+    pub income: i64,
+    #[serde(with = "money::val")]
+    pub spending: i64,
+    /// The same two for the month before.
+    #[serde(with = "money::val")]
+    pub last_income: i64,
+    #[serde(with = "money::val")]
+    pub last_spending: i64,
+    /// Spending by tag, biggest first, with what each took the month before; a tag the month did not spend
+    /// on but the one before did is listed too, at zero.
+    pub categories: Vec<CategoryChange>,
+    /// The largest single spends, up to five.
+    pub biggest: Vec<Spend>,
+    pub budgets: Vec<Budget>,
+    /// Net worth at the end of the month before and at the end of this one (today, for the month in progress);
+    /// absent for months more than a year back.
+    pub net_start: Option<NetPoint>,
+    pub net_end: Option<NetPoint>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CategoryChange {
+    pub tag: String,
+    #[serde(with = "money::val")]
+    pub total: i64,
+    #[serde(with = "money::val")]
+    pub last_month: i64,
+}
+
+/// One transaction, as a report lists it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Spend {
+    pub id: i64,
+    pub date: String,
+    pub description: String,
+    pub account: String,
+    /// Its first tag, `untagged` when it has none.
+    pub tag: String,
+    /// Money out, as a positive amount.
+    #[serde(with = "money::val")]
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReportQuery {
+    /// `YYYY-MM`; this month when left out.
+    pub month: Option<String>,
+}
