@@ -11,9 +11,9 @@ const NOTE: &str = "Amounts are decimal numbers or strings in major units (e.g. 
 /// The scope a tool needs.
 fn scope_of(tool: &str) -> &'static str {
     match tool {
-        "list_accounts" | "list_subscriptions" | "list_assets" | "get_insights" | "ask_pebblelab" => "read",
+        "list_accounts" | "list_subscriptions" | "list_assets" | "list_budgets" | "get_insights" | "ask_pebblelab" => "read",
         "list_transactions" | "list_tags" => "transactions",
-        "add_transaction" | "transfer_money" | "add_subscription" | "add_asset" => "add",
+        "add_transaction" | "transfer_money" | "add_subscription" | "add_asset" | "set_budget" => "add",
         _ => "edit",
     }
 }
@@ -80,6 +80,12 @@ fn tools() -> Value {
          "subscription_id": id, "name": s, "amount": amount, "cycle": {"type": "string", "enum": ["monthly", "yearly"]}, "next": s, "account_id": id, "tag": s, "active": {"type": "boolean"}}}},
       {"name": "delete_subscription", "description": "Delete a subscription. Transactions it already added stay.",
        "inputSchema": {"type": "object", "required": ["subscription_id"], "properties": {"subscription_id": id}}},
+      {"name": "list_budgets", "description": "List the monthly budgets: a limit on one tag, with what this month (or `month`, YYYY-MM) has spent of it and what the month before spent. Spending is money out with the tag, less refunds, on the accounts you can see; transfers never count.",
+       "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "YYYY-MM, defaults to this month"}}}},
+      {"name": "set_budget", "description": format!("Set a monthly limit on a tag (see list_tags). A tag has one budget: setting it again changes the amount. {NOTE}"),
+       "inputSchema": {"type": "object", "required": ["tag", "amount"], "properties": {"tag": s, "amount": amount}}},
+      {"name": "delete_budget", "description": "Delete a budget. Nothing else changes.",
+       "inputSchema": {"type": "object", "required": ["budget_id"], "properties": {"budget_id": id}}},
       {"name": "list_assets", "description": format!("List things you own outside your accounts (property, vehicle, gold, electronics, other) with price paid and value now. They count towards assets in insights. {NOTE}"),
        "inputSchema": {"type": "object", "properties": {}}},
       {"name": "add_asset", "description": format!("Add something you own. kind is property, vehicle, gold, electronics or other; bought is a month as YYYY-MM; cost is what you paid, value is what it is worth now. {NOTE}"),
@@ -125,6 +131,11 @@ struct AssetRef<T> {
     asset_id: i64,
     #[serde(flatten)]
     rest: T,
+}
+
+#[derive(Deserialize)]
+struct BudgetRef {
+    budget_id: i64,
 }
 
 #[derive(Deserialize, Default)]
@@ -173,6 +184,13 @@ async fn call_tool(s: &Store, c: &Caller, name: &str, a: Value) -> Result<Value,
         "delete_subscription" => {
             let r: SubRef<serde_json::Map<String, Value>> = args(a)?;
             s.delete_subscription(c, r.subscription_id).await?;
+            out(json!({"deleted": true}))
+        }
+        "list_budgets" => out(s.budgets(c, args(a)?).await?),
+        "set_budget" => out(s.set_budget(c, args(a)?).await?),
+        "delete_budget" => {
+            let r: BudgetRef = args(a)?;
+            s.delete_budget(c, r.budget_id).await?;
             out(json!({"deleted": true}))
         }
         "list_assets" => out(s.assets(c).await?),

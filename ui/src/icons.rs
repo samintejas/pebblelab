@@ -10,6 +10,7 @@ pub const BACK: &str = "M19 12H5M12 19l-7-7 7-7";
 pub const SWAP: &str = "M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4";
 pub const DASHBOARD: &str = "M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z";
 pub const MENU: &str = "M4 6h16M4 12h16M4 18h16";
+pub const PIE: &str = "M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1zM21.21 15.89A10 10 0 1 1 8 2.83";
 pub const PLUS: &str = "M5 12h14M12 5v14";
 pub const X: &str = "M18 6 6 18M6 6l12 12";
 pub const REPEAT: &str = "m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3";

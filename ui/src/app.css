@@ -129,3 +129,16 @@
 /* settings on a phone: its sections in one row that scrolls sideways */
 .d-shell[data-mobile] .set > .d-secnav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 8px; }
 .d-shell[data-mobile] .set > .d-secnav > * { flex: none; }
+
+/* budgets: a tag, how much of its month is used, and what is left */
+.bg-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+.bg-item { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); }
+.bg-item__top, .bg-item__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bg-item__fig { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.bg-item__foot { color: var(--text-secondary); font-size: var(--font-size-sm); flex-wrap: nowrap; }
+.bg-item__foot > span:first-child { min-width: 0; }
+.bg-item__foot [data-over] { color: var(--accent-danger); }
+.bg-item__acts { display: flex; gap: 4px; margin-left: auto; }
+.bg-item .d-meter { height: 6px; border-radius: 3px; }
+/* insights: the card header holds a chart switch; on a phone the scope words give way to it */
+.d-shell[data-mobile] .ins-scope { display: none; }

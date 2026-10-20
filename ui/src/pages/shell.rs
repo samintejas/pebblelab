@@ -103,6 +103,7 @@ pub fn AppShell() -> impl IntoView {
                         {move || view! { <SidebarItem href="/accounts" icon="wallet" label="accounts" current=Signal::derive(move || page.get() == "accounts") count=acct_count().to_string()/> }}
                     </SidebarGroup>
                     <SidebarGroup label="track">
+                        <TrackItem href="/budgets" icon=PIE label="budgets" current=Signal::derive(move || page.get() == "budgets")/>
                         <TrackItem href="/subscriptions" icon=REPEAT label="subscriptions" current=Signal::derive(move || page.get() == "subscriptions")/>
                         <TrackItem href="/assets" icon=PACKAGE label="assets" current=Signal::derive(move || page.get() == "assets")/>
                     </SidebarGroup>
@@ -152,7 +153,7 @@ fn TabBar(page: Memo<String>) -> impl IntoView {
             </a>
         }
     };
-    let more_current = move || ["subscriptions", "assets", "settings"].contains(&page.get().as_str());
+    let more_current = move || ["budgets", "subscriptions", "assets", "settings"].contains(&page.get().as_str());
     view! {
         <nav class="m-tabs" aria-label="screens">
             {tab("/transactions", SWAP, "transactions")}

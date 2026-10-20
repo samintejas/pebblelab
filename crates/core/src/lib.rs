@@ -4,6 +4,7 @@
 mod accounts;
 mod assets;
 mod auth;
+mod budgets;
 mod connect;
 mod error;
 mod family;
