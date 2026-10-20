@@ -48,6 +48,7 @@ impl Store {
 
     pub async fn create_family(&self, c: &Caller, b: NewFamily) -> Result<Family> {
         c.need("edit")?;
+        c.need_person("create a family")?;
         let name = clean(&b.name).to_lowercase();
         if name.is_empty() {
             return Err(Error::bad("name your family"));
@@ -65,6 +66,7 @@ impl Store {
     /// Make a one-time invite code, good for a week. A new code replaces the last unused one. Owner only.
     pub async fn generate_invite(&self, c: &Caller) -> Result<Family> {
         c.need("edit")?;
+        c.need_person("invite people")?;
         let f = self.family(c.user_id).await?.ok_or(Error::NotFound("family"))?;
         if f.owner_id != c.user_id {
             return Err(Error::Forbidden("only the family owner can invite".into()));
@@ -82,6 +84,7 @@ impl Store {
 
     pub async fn join_family(&self, c: &Caller, b: JoinFamily) -> Result<Family> {
         c.need("edit")?;
+        c.need_person("join a family")?;
         let code = clean(&b.code).to_uppercase();
         if code.is_empty() {
             return Err(Error::bad("enter the invite code"));
@@ -138,6 +141,7 @@ impl Store {
     /// leaves, the longest-standing member becomes owner; the family goes when the last person does.
     pub async fn leave_family(&self, c: &Caller) -> Result<()> {
         c.need("edit")?;
+        c.need_person("leave the family")?;
         let mut db = self.pool.begin().await?;
         self.leave_family_on(&mut db, c.user_id).await?;
         db.commit().await?;
@@ -163,6 +167,7 @@ impl Store {
     /// ends; a joint account stays joint between the same owners. Owner only.
     pub async fn delete_family(&self, c: &Caller) -> Result<()> {
         c.need("edit")?;
+        c.need_person("delete the family")?;
         let mut db = self.pool.begin().await?;
         let f = self.family_on(&mut db, c.user_id).await?.ok_or(Error::NotFound("family"))?;
         if f.owner_id != c.user_id {

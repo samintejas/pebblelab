@@ -132,6 +132,9 @@ Tools: `list_accounts`, `create_account`, `update_account`, `reconcile_account`,
 `transfer_money`, `update_transaction`, `delete_transaction`, `list_subscriptions`, `add_subscription`, `update_subscription`, `delete_subscription`, `list_assets`, `add_asset`,
 `update_asset`, `delete_asset`, `list_tags`, `get_insights`, `ask_pebblelab`.
 A token has scopes: `read`, `transactions` (read them), `add`, `edit`; a tool outside them reports the missing scope.
+Whatever its scopes, a token (a connector, or `PEBBLELAB_TOKEN`) only works on the money: the profile and email, the
+password, sessions, connectors, the family, who sees an account, deleting an account and reopening reconciled dates are
+done by the person, signed in (the app, or the CLI with `--as`). `crates/core/tests/isolation.rs` holds these lines.
 
 ### connecting claude.ai, chatgpt and other remote clients (oauth)
 
