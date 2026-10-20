@@ -980,6 +980,9 @@ fn AccountView(a: Account, saved: RwSignal<bool>) -> impl IntoView {
     };
     let owner_line = if a.owners.len() == 1 && owned { "yours".to_string() } else { owners_line(&a) };
     let (name, balance) = (a.name.clone(), app.money(a.balance));
+    // a loan follows its schedule and a linked investment its asset: neither has a statement to match
+    let reconcilable = owned && a.kind != AccountKind::Loan && a.asset.is_none();
+    let recon = a.clone();
     view! {
         <div style="display:flex;flex-direction:column;gap:16px">
             <div class="d-row" style="justify-content:space-between;gap:12px;align-items:flex-end">
@@ -1036,6 +1039,86 @@ fn AccountView(a: Account, saved: RwSignal<bool>) -> impl IntoView {
                     }}
                 </form>
             </div>
+            {reconcilable.then(|| view! { <ReconcileCard a=recon.clone()/> })}
         </div>
+    }
+}
+
+/// Match the account to a statement. Everything on or before its date is fixed from then on.
+#[component]
+fn ReconcileCard(a: Account) -> impl IntoView {
+    let app = expect_context::<AppState>();
+    let id = a.id;
+    let card = a.kind == AccountKind::Credit;
+    let through = RwSignal::new(fmt::today());
+    let stated = RwSignal::new(String::new());
+    let err = RwSignal::new(None::<String>);
+    let busy = RwSignal::new(false);
+    let done = move |r: Result<(), api::ApiError>| {
+        busy.set(false);
+        match r {
+            Ok(_) => {
+                stated.set(String::new());
+                app.reload();
+            }
+            Err(e) if e.status == 400 || e.status == 403 => err.set(Some(e.message)),
+            Err(e) => app.fail(&e),
+        }
+    };
+    let reconcile = move || {
+        let d = through.get_untracked();
+        if d.is_empty() || d > fmt::today() {
+            return err.set(Some("enter the statement's date, today or earlier".into()));
+        }
+        let mut body = serde_json::json!({ "through": d });
+        let raw = stated.get_untracked();
+        if !raw.trim().is_empty() {
+            match parse_minor(raw.trim()) {
+                Ok(v) => body["balance"] = format_minor(v).into(),
+                Err(_) => return err.set(Some("enter the statement's balance as a number, or leave it empty".into())),
+            }
+        }
+        err.set(None);
+        busy.set(true);
+        leptos::task::spawn_local(async move { done(api::post::<Account>(&format!("/accounts/{id}/reconcile"), &body).await.map(|_| ())) });
+    };
+    let reopen = move |_| {
+        err.set(None);
+        busy.set(true);
+        leptos::task::spawn_local(async move { done(api::delete(&format!("/accounts/{id}/reconcile")).await.map(|_| ())) });
+    };
+    let meta = a.reconciled.as_ref().map(|r| format!("through {}", fmt::day(&r.through))).unwrap_or_else(|| "not yet".into());
+    let rows = Signal::stored(
+        a.reconciled
+            .as_ref()
+            .map(|r| vec![("reconciled through".to_string(), fmt::day(&r.through)), ((if card { "owed then" } else { "balance then" }).to_string(), app.money(r.balance))])
+            .unwrap_or_default(),
+    );
+    let has = a.reconciled.is_some();
+    view! {
+        <form class="d-card" aria-labelledby="ap-r" on:submit=move |e| { e.prevent_default(); reconcile() }>
+            <header class="d-card__head"><h2 class="d-card__title" id="ap-r">"reconcile"</h2><span class="d-card__meta">{meta}</span></header>
+            <div class="d-card__body" style="color:var(--text-secondary)">
+                "match this account to a statement. everything on or before the statement's date is then fixed, so a mistake found later is corrected with a new transaction dated after it."
+            </div>
+            {has.then(|| view! { <div class="d-card__body d-card__body--flush" style="border-top:1px solid var(--border-subtle)"><SummaryList rows=rows/></div> })}
+            <div class="d-card__body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px;align-items:start;border-top:1px solid var(--border-subtle)">
+                <div class="d-field">
+                    <label class="d-label" for="ar-date">"statement date"</label>
+                    <input class="d-input" id="ar-date" type="date" max=fmt::today() prop:value=move || through.get() on:change=move |e| through.set(event_target_value(&e))/>
+                </div>
+                <div class="d-field">
+                    <label class="d-label" for="ar-bal">{if card { "owed on the statement (₹) " } else { "statement balance (₹) " }}<span>"(optional)"</span></label>
+                    <input class="d-input" id="ar-bal" type="text" inputmode="decimal" aria-describedby="ar-bal-h" prop:value=move || stated.get() on:input=move |e| stated.set(event_target_value(&e))/>
+                    <span class="d-hint" id="ar-bal-h">"checked against the transactions up to that date. nothing is saved if they differ."</span>
+                </div>
+            </div>
+            {move || err.get().map(|m| view! { <div class="d-card__body" style="padding-top:0"><span class="d-error" role="alert">{format!("error: {m}")}</span></div> })}
+            <footer class="d-card__foot" style="justify-content:space-between">
+                {has.then(|| view! { <button type="button" class="d-btn d-btn--ghost" title="make every date editable again" on:click=reopen>"reopen all dates"</button> })}
+                <span></span>
+                <button type="submit" class="d-btn d-btn--primary" aria-busy=move || busy.get().then_some("true")><Ico d=LOCK small=true/>"reconcile"</button>
+            </footer>
+        </form>
     }
 }

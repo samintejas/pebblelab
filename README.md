@@ -105,6 +105,7 @@ pebblelab account add "home loan" --kind loan --total 2500000 --rate 8.5 --tenur
 pebblelab tx add salary 3240 groceries, weekly --tag groceries,household
 pebblelab tx transfer salary "card, anita" 20000
 pebblelab tx list --tag groceries
+pebblelab account reconcile salary 2026-09-30 --balance 182410   # match a statement; on or before it is fixed
 pebblelab sub add "streaming video" 649 "card, anita" --tag entertainment --next 2026-11-12   # renewals become transactions
 pebblelab sub list
 pebblelab asset add "apartment, pune" 8200000 --kind property --bought 2019-04 --cost 6500000
@@ -121,13 +122,13 @@ pebblelab token create claude --scopes read,transactions,add
 `/api/*`, JSON, `Authorization: Bearer <token>`. Amounts are decimal strings (`"3240.50"`) in major units. Sign in
 at `POST /api/auth/signin` for a session token, or create a connector token (profile, connectors).
 Routes: `auth/{signup,signin,signout,signout-all,reset,reset/confirm,providers,redeem}`, `auth/{google,github}/{start,callback}`, `me` (also delete), `me/password`, `export.csv`,
-`family` (create, delete), `family/{invite,join,leave}`, `accounts` (and `accounts/{id}/leave`), `transactions` (filter, sort, page, in/out
+`family` (create, delete), `family/{invite,join,leave}`, `accounts` (and `accounts/{id}/leave`, `accounts/{id}/reconcile` post and delete), `transactions` (filter, sort, page, in/out
 totals), `transfers`, `transactions/{id}/attachments`, `subscriptions`, `assets`, `tags`, `insights`, `ask`, `notifications`, `connectors`.
 
 ## mcp
 
 `POST /mcp` (streamable HTTP, bearer token) or `pebblelab mcp` on stdio (`PEBBLELAB_TOKEN`, and `PEBBLELAB_DB` if not the default).
-Tools: `list_accounts`, `create_account`, `update_account`, `list_transactions`, `add_transaction`,
+Tools: `list_accounts`, `create_account`, `update_account`, `reconcile_account`, `list_transactions`, `add_transaction`,
 `transfer_money`, `update_transaction`, `delete_transaction`, `list_subscriptions`, `add_subscription`, `update_subscription`, `delete_subscription`, `list_assets`, `add_asset`,
 `update_asset`, `delete_asset`, `list_tags`, `get_insights`, `ask_pebblelab`.
 A token has scopes: `read`, `transactions` (read them), `add`, `edit`; a tool outside them reports the missing scope.
@@ -158,6 +159,13 @@ a token. This follows the MCP authorization spec:
   (`accounts/{id}/leave`); an account with several owners can only be deleted once the others have left. A transfer
   is between accounts you own.
 - A transfer is two linked transactions, edited and deleted together.
+- Reconciling an account matches it to a statement: a date and, if given, the statement's balance, which the
+  transactions up to that date must add up to. From then on nothing dated on or before it can be added, deleted, or
+  have its amount, date or account changed (descriptions, tags, notes and files still can); a mistake found later
+  is corrected with a new transaction dated after it. The database enforces it, so the app, the api, mcp, the cli
+  and subscription renewals all keep it (a renewal on a reconciled date is skipped). Setting the balance of a
+  reconciled account adds a `balance adjustment` dated today instead of moving the opening figure. Owners can
+  reopen the dates from the account page or with `--clear`; mcp clients cannot.
 - A subscription is a monthly or yearly charge on an account you own. When its renewal date arrives a debit is
   added (tagged with its category and `subscription`) and the date moves on. This happens when anything that
   depends on balances is read, once per renewal, and a paused subscription adds nothing. Subscriptions are yours

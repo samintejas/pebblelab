@@ -86,6 +86,18 @@ impl AppState {
         self.accounts.with(|a| a.iter().find(|a| a.id == id).map(|a| a.name.clone()).unwrap_or_else(|| "?".into()))
     }
 
+    /// The reconciled date that fixes this transaction's amount, date and account, if an account it is on
+    /// was reconciled on or after its date.
+    pub fn locked_by(&self, t: &Transaction) -> Option<String> {
+        self.accounts.with(|list| {
+            list.iter()
+                .filter(|a| a.id == t.account_id || Some(a.id) == t.counterpart_id)
+                .filter_map(|a| a.reconciled.as_ref().map(|r| r.through.clone()))
+                .filter(|d| t.date <= *d)
+                .max()
+        })
+    }
+
     /// Accounts you own (the ones you can add to).
     pub fn mine(&self) -> Vec<Account> {
         let me = self.my_id();

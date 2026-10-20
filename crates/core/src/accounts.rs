@@ -196,6 +196,7 @@ impl Store {
                 deposit,
                 asset: asset.map(|(a, _)| a),
                 archived: r.get::<i64, _>("archived") != 0,
+                reconciled: r.get::<Option<String>, _>("reconciled_through").map(|through| Reconciled { through, balance: opt_i(&r, "reconciled_balance").unwrap_or(0) }),
             });
         }
         Ok(out)
@@ -419,6 +420,9 @@ impl Store {
                 return Err(Error::bad("only gold, real estate and other investments can be linked to an asset: unlink it to change the type"));
             }
             if a.asset.as_ref().map(|l| l.id) != Some(aid) {
+                if a.reconciled.is_some() {
+                    return Err(Error::bad("a reconciled account cannot be linked to an asset: clear its reconciliation first"));
+                }
                 self.check_link(&mut db, c, aid, Some(id)).await?;
             }
             if b.balance.is_some() {
@@ -455,7 +459,28 @@ impl Store {
             }
         }
         if let Some(opening) = opening {
-            sqlx::query("UPDATE accounts SET opening = $1 WHERE id = $2").bind(opening).bind(id).execute(&mut *db).await?;
+            if a.reconciled.is_some() {
+                // the past is reconciled: the difference goes in as a transaction today, not into history
+                let was: i64 = sqlx::query("SELECT opening FROM accounts WHERE id = $1").bind(id).fetch_one(&mut *db).await?.get(0);
+                let diff = opening - was;
+                if diff != 0 {
+                    let tx: i64 = sqlx::query(
+                        "INSERT INTO transactions (account_id, kind, amount, date, description, note, created_by) VALUES ($1,$2,$3,$4,'balance adjustment',$5,$6) RETURNING id",
+                    )
+                    .bind(id)
+                    .bind(if diff > 0 { "credit" } else { "debit" })
+                    .bind(diff)
+                    .bind(self.today().to_string())
+                    .bind("added when the balance was set, because earlier dates are reconciled.")
+                    .bind(c.user_id)
+                    .fetch_one(&mut *db)
+                    .await?
+                    .get(0);
+                    sqlx::query("INSERT INTO tx_tags (tx_id, tag) VALUES ($1, 'adjustment')").bind(tx).execute(&mut *db).await?;
+                }
+            } else {
+                sqlx::query("UPDATE accounts SET opening = $1 WHERE id = $2").bind(opening).bind(id).execute(&mut *db).await?;
+            }
         }
         if b.asset_id.is_some() {
             sqlx::query("UPDATE accounts SET asset_id = $1 WHERE id = $2").bind(link_after).bind(id).execute(&mut *db).await?;
@@ -484,6 +509,68 @@ impl Store {
             .execute(&mut *db)
             .await?;
         }
+        db.commit().await?;
+        self.account_unchecked(c.user_id, id).await
+    }
+}
+
+impl Store {
+    /// Match an account to its statement up to `through`. From then on nothing on or before that date can change
+    /// its balance (the database refuses it). Reconciling again with another date moves the line, either way.
+    pub async fn reconcile_account(&self, c: &Caller, id: i64, b: Reconcile) -> Result<Account> {
+        c.need("edit")?;
+        let mut db = self.pool.begin().await?;
+        self.lock_account(&mut db, id).await?;
+        let a = self.owned_account(c, id).await?;
+        if a.kind == AccountKind::Loan {
+            return Err(Error::bad("a loan's balance comes from its schedule, so there is nothing to reconcile"));
+        }
+        if a.asset.is_some() {
+            return Err(Error::bad("a linked investment is worth what its asset is worth, so there is nothing to reconcile"));
+        }
+        if b.through.trim().is_empty() {
+            return Err(Error::bad("say the statement's date (through), as YYYY-MM-DD"));
+        }
+        let through = self.date_or_today(Some(&b.through))?;
+        if through > self.today().to_string() {
+            return Err(Error::bad("a statement cannot be from the future"));
+        }
+        let raw: i64 = sqlx::query("SELECT opening + COALESCE((SELECT SUM(amount) FROM transactions WHERE account_id = $1 AND date <= $2), 0)::BIGINT FROM accounts WHERE id = $1")
+            .bind(id)
+            .bind(&through)
+            .fetch_one(&mut *db)
+            .await?
+            .get(0);
+        let shown = if a.kind == AccountKind::Credit { -raw } else { raw };
+        if let Some(stated) = b.balance {
+            if stated != shown {
+                let cur = self.user(c.user_id).await?.currency;
+                // to the paisa: a statement that is off by 0.50 must say so
+                let fmt = |m: i64| {
+                    let whole = crate::notify::show_money(m - m % 100, &cur);
+                    if m % 100 == 0 { whole } else { format!("{whole}.{:02}", (m % 100).abs()) }
+                };
+                let (gap, way) = if shown > stated { (shown - stated, "more") } else { (stated - shown, "less") };
+                return Err(Error::bad(format!(
+                    "up to {through} the transactions come to {}, but the statement says {}: {} {way}. find the difference, then reconcile again",
+                    fmt(shown),
+                    fmt(stated),
+                    fmt(gap)
+                )));
+            }
+        }
+        sqlx::query("UPDATE accounts SET reconciled_through = $1, reconciled_balance = $2 WHERE id = $3").bind(&through).bind(shown).bind(id).execute(&mut *db).await?;
+        db.commit().await?;
+        self.account_unchecked(c.user_id, id).await
+    }
+
+    /// Open every date of an account again.
+    pub async fn clear_reconciliation(&self, c: &Caller, id: i64) -> Result<Account> {
+        c.need("edit")?;
+        let mut db = self.pool.begin().await?;
+        self.lock_account(&mut db, id).await?;
+        self.owned_account(c, id).await?;
+        sqlx::query("UPDATE accounts SET reconciled_through = NULL, reconciled_balance = NULL WHERE id = $1").bind(id).execute(&mut *db).await?;
         db.commit().await?;
         self.account_unchecked(c.user_id, id).await
     }

@@ -375,11 +375,22 @@ fn Row(t: Transaction, family: bool, quick: Quick) -> impl IntoView {
     let (dup_label, open_label) = (format!("duplicate {} into the add bar", t.description), format!("open {} in the side panel", t.description));
     let date_shown = fmt::day(&t.date);
     let today = fmt::today();
+    // on a reconciled date only what does not move the balance can change
+    let locked = app.locked_by(&t);
+    let fixed = locked.is_some();
+    let lock_title = locked.map(|d| format!("reconciled through {}: correct it with a new transaction dated after that", fmt::day(&d))).unwrap_or_default();
+    let lock_title2 = lock_title.clone();
     view! {
         <tr aria-selected=move || app.panel.with(|p| p.as_ref().is_some_and(|p| p.id == id)).to_string()>
-            <EditCell label="date" kind=EditKind::Date value=t.date.clone() on_save=move |v: String| {
-                if v.is_empty() || v > today { app.error("error: the date cannot be in the future"); } else { save(serde_json::json!({"date": v})) }
-            }>{date_shown.clone()}</EditCell>
+            {if fixed {
+                view! { <td title=lock_title.clone()><span class="d-row" style="gap:4px;flex-wrap:nowrap">{date_shown.clone()}<span class="d-sr">" (reconciled)"</span><span style="color:var(--text-secondary)"><Ico d=LOCK small=true/></span></span></td> }.into_any()
+            } else {
+                view! {
+                    <EditCell label="date" kind=EditKind::Date value=t.date.clone() on_save=move |v: String| {
+                        if v.is_empty() || v > today { app.error("error: the date cannot be in the future"); } else { save(serde_json::json!({"date": v})) }
+                    }>{date_shown.clone()}</EditCell>
+                }.into_any()
+            }}
             <EditCell label="description" value=desc on_save=move |v: String| if !v.trim().is_empty() { save(serde_json::json!({"description": v.trim().to_lowercase()})) }>
                 <span style="color:var(--text-strong)">{desc_shown.clone()}</span>
             </EditCell>
@@ -389,7 +400,7 @@ fn Row(t: Transaction, family: bool, quick: Quick) -> impl IntoView {
                 </span>
             </EditCell>
             <td>
-                {move || if editing_acct.get() && !is_transfer {
+                {move || if editing_acct.get() && !is_transfer && !fixed {
                     let current = acct_id.clone();
                     view! {
                         <span class="d-select">
@@ -403,16 +414,22 @@ fn Row(t: Transaction, family: bool, quick: Quick) -> impl IntoView {
                     }.into_any()
                 } else {
                     let _ = &acct_id2;
-                    view! { <button type="button" class="cell-btn" title=if is_transfer { "a transfer keeps its accounts" } else { "edit account" } on:click=move |_| editing_acct.set(true)>{account.clone()}</button> }.into_any()
+                    view! { <button type="button" class="cell-btn" title=if fixed { "reconciled: the account is fixed" } else if is_transfer { "a transfer keeps its accounts" } else { "edit account" } on:click=move |_| editing_acct.set(true)>{account.clone()}</button> }.into_any()
                 }}
             </td>
             {family.then(|| view! { <td><span class="d-row" style="gap:8px;flex-wrap:nowrap"><span class="d-avatar d-avatar--sm" aria-hidden="true">{initials}</span>{first}</span></td> })}
-            <EditCell label="amount" kind=EditKind::Number num=true value=fmt::plain(amount) on_save=move |v: String| match parse_minor(&v) {
-                Ok(a) if a > 0 => save(serde_json::json!({"amount": format_minor(a)})),
-                _ => app.error("error: enter an amount above zero"),
-            }>
-                <span style="color:var(--text-strong)">{amount_shown.clone()}</span>
-            </EditCell>
+            {if fixed {
+                view! { <td class="d-num" title=lock_title2.clone()><span style="color:var(--text-strong)">{amount_shown.clone()}</span></td> }.into_any()
+            } else {
+                view! {
+                    <EditCell label="amount" kind=EditKind::Number num=true value=fmt::plain(amount) on_save=move |v: String| match parse_minor(&v) {
+                        Ok(a) if a > 0 => save(serde_json::json!({"amount": format_minor(a)})),
+                        _ => app.error("error: enter an amount above zero"),
+                    }>
+                        <span style="color:var(--text-strong)">{amount_shown.clone()}</span>
+                    </EditCell>
+                }.into_any()
+            }}
             <td class="d-num" style="white-space:nowrap">
                 <button type="button" class="d-btn d-btn--ghost d-btn--icon d-btn--sm" aria-label=dup_label title="repeat: fill the add bar with this transaction, dated today"
                     on:click=move |_| {
@@ -614,6 +631,8 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
     let tags = RwSignal::new(t.tags.join(", "));
     let acct = RwSignal::new(t.account_id.to_string());
     let to_name = t.counterpart_id.map(|c| app.account_name(c)).unwrap_or_default();
+    let locked = app.locked_by(&t);
+    let fixed = locked.is_some();
     let files = RwSignal::new(t.attachments.clone());
     let err = RwSignal::new(None::<String>);
     let busy = RwSignal::new(false);
@@ -688,7 +707,7 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
         app.tags.get().into_iter().filter(|g| g != "transfer" && !have.contains(g)).take(8).collect::<Vec<_>>()
     };
     let seg = move |value: &'static str| {
-        let disabled = is_transfer != (value == "transfer");
+        let disabled = fixed || is_transfer != (value == "transfer");
         view! {
             <button type="button" class="d-seg__opt" role="radio" aria-checked=move || (kind.get() == value).to_string() disabled=disabled on:click=move |_| kind.set(value)>{value}</button>
         }
@@ -704,12 +723,13 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
                     <span class="d-label">"transaction id"</span>
                     <button type="button" class="d-btn d-btn--ghost d-btn--sm" title="copy transaction id" aria-label="copy transaction id" on:click=move |_| crate::pages::settings::copy(app, uid2.clone())><span style="font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis">{uid.clone()}</span><Ico d=COPY/></button>
                 </div>
-                <div class="d-seg d-seg--lg d-seg--fill" role="radiogroup" aria-label="kind of transaction">{seg("expense")}{seg("income")}{seg("transfer")}</div>
+                <div class="d-seg d-seg--lg d-seg--fill" role="radiogroup" aria-label="kind of transaction" aria-describedby=fixed.then_some("sh-lock")>{seg("expense")}{seg("income")}{seg("transfer")}</div>
+                {locked.clone().map(|d| view! { <Reason id="sh-lock">{format!("reconciled through {}. the amount, date and account are fixed; to correct it, add a new transaction dated after that.", fmt::day(&d))}</Reason> })}
                 <div class="d-field">
                     <label class="d-label" for="sh-amt">"amount"</label>
-                    <div class="d-input amt" style="display:flex;align-items:baseline;gap:8px;height:56px;padding:0 16px;box-sizing:border-box;width:100%">
+                    <div class="d-input amt" style=format!("display:flex;align-items:baseline;gap:8px;height:56px;padding:0 16px;box-sizing:border-box;width:100%{}", if fixed { ";opacity:.5" } else { "" })>
                         <span aria-hidden="true" style="align-self:center;color:var(--text-secondary);font-size:var(--font-size-xl)">{move || fmt::symbol(&app.currency())}</span>
-                        <input id="sh-amt" type="text" inputmode="decimal" placeholder="0" aria-describedby="sh-amt-c" prop:value=move || amount.get() on:input=move |e| amount.set(event_target_value(&e))
+                        <input id="sh-amt" type="text" inputmode="decimal" placeholder="0" aria-describedby=if fixed { "sh-amt-c sh-lock" } else { "sh-amt-c" } disabled=fixed prop:value=move || amount.get() on:input=move |e| amount.set(event_target_value(&e))
                             style="flex:1;min-width:0;align-self:stretch;padding:0;border:0;outline:none;background:none;font:inherit;font-size:var(--font-size-2xl);font-weight:500;color:var(--text-max)"/>
                         <span id="sh-amt-c" style="align-self:center;color:var(--text-secondary);font-size:var(--font-size-xs)">{move || app.currency()}</span>
                     </div>
@@ -720,13 +740,13 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
                 </div>
                 <div class="d-field">
                     <label class="d-label" for="sh-date">"date"</label>
-                    <input class="d-input" id="sh-date" type="date" max=fmt::today() aria-describedby="sh-date-h" prop:value=move || date.get() on:change=move |e| date.set(event_target_value(&e))/>
+                    <input class="d-input" id="sh-date" type="date" max=fmt::today() aria-describedby=if fixed { "sh-date-h sh-lock" } else { "sh-date-h" } disabled=fixed prop:value=move || date.get() on:change=move |e| date.set(event_target_value(&e))/>
                     <span class="d-hint" id="sh-date-h">"completed transactions only. today or earlier."</span>
                 </div>
                 <div class="d-field">
                     <label class="d-label" for="sh-acct">{if is_transfer { "from account" } else { "account" }}</label>
                     <span class="d-select">
-                        <select class="d-input" id="sh-acct" disabled=is_transfer on:change=move |e| acct.set(event_target_value(&e))>
+                        <select class="d-input" id="sh-acct" disabled=is_transfer || fixed aria-describedby=fixed.then_some("sh-lock") on:change=move |e| acct.set(event_target_value(&e))>
                             {move || app.accounts.get().into_iter().filter(|a| a.owners.iter().any(|o| o.id == app.my_id()) || a.id.to_string() == acct.get_untracked()).map(|a| { let v = a.id.to_string(); let sel = v == acct.get_untracked(); view! { <option value=v selected=sel>{a.name.clone()}</option> } }).collect_view()}
                         </select>
                     </span>
@@ -787,7 +807,8 @@ pub fn TxPanel(t: Transaction) -> impl IntoView {
                 {move || err.get().map(|m| view! { <span class="d-error" role="alert">{format!("error: {m}")}</span> })}
             </div>
             <footer class="d-row" style="flex:none;justify-content:space-between;flex-wrap:nowrap;gap:8px;padding:12px 16px;border-top:1px solid var(--border-subtle)">
-                <button type="button" class="d-btn d-btn--danger d-btn--icon" aria-label="delete transaction" title="delete transaction" on:click=move |_| confirm.set(true)><Ico d=TRASH_LINES/></button>
+                <button type="button" class="d-btn d-btn--danger d-btn--icon" aria-label="delete transaction" title=if fixed { "reconciled: it cannot be deleted" } else { "delete transaction" }
+                    disabled=fixed aria-describedby=fixed.then_some("sh-lock") on:click=move |_| confirm.set(true)><Ico d=TRASH_LINES/></button>
                 <button type="submit" class="d-btn d-btn--primary" title="save transaction" aria-busy=move || busy.get().then_some("true")><Ico d=CHECK/>"save"</button>
             </footer>
         </form>

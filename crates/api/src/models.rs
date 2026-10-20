@@ -287,6 +287,28 @@ pub struct Account {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset: Option<LinkedAsset>,
     pub archived: bool,
+    /// Checked against a statement up to a date. Nothing on or before it can change the balance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciled: Option<Reconciled>,
+}
+
+/// Where an account was last matched to its statement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Reconciled {
+    /// The statement's date, YYYY-MM-DD. Transactions on or before it are closed.
+    pub through: String,
+    /// The balance on that date, as shown (owed, for a card).
+    #[serde(with = "money::val")]
+    pub balance: i64,
+}
+
+/// Reconcile an account up to a date. With `balance` (the statement's figure) the transactions must add up to
+/// it, or nothing is saved and the answer says by how much they are off.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Reconcile {
+    pub through: String,
+    #[serde(default, with = "money::opt")]
+    pub balance: Option<i64>,
 }
 
 /// The asset behind a linked investment.

@@ -218,9 +218,22 @@ pub struct NewAcct {
 #[derive(Subcommand)]
 pub enum AccountCmd {
     Add(NewAcct),
-    /// Set the current balance of an account (history is kept).
+    /// Set the current balance of an account (history is kept; when reconciled, the difference is added today).
     Set { account: String, balance: String },
     Archive { account: String },
+    /// Match an account to its statement up to a date. Nothing on or before it can change afterwards.
+    Reconcile {
+        account: String,
+        /// The statement's date, YYYY-MM-DD.
+        #[arg(required_unless_present = "clear")]
+        through: Option<String>,
+        /// The statement's closing balance: refused unless the transactions add up to it.
+        #[arg(long)]
+        balance: Option<String>,
+        /// Open every date again instead.
+        #[arg(long, conflicts_with_all = ["balance"])]
+        clear: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -524,6 +537,18 @@ pub async fn run(cli: Cli, s: Store) -> Result<(), Error> {
                     let a = account(&s, &c, &what).await?;
                     s.update_account(&c, a.id, UpdateAccount { archived: Some(true), ..Default::default() }).await?;
                     println!("archived {}", a.name);
+                }
+                AccountCmd::Reconcile { account: what, through, balance, clear } => {
+                    let a = account(&s, &c, &what).await?;
+                    if clear {
+                        s.clear_reconciliation(&c, a.id).await?;
+                        println!("{} is open again", a.name);
+                    } else {
+                        let u = s.reconcile_account(&c, a.id, Reconcile { through: through.unwrap_or_default(), balance: opt_amount(&balance)? }).await?;
+                        if let Some(r) = u.reconciled {
+                            println!("{} is reconciled through {} at {}", u.name, r.through, money(r.balance));
+                        }
+                    }
                 }
             }
         }

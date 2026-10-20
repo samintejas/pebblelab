@@ -123,6 +123,7 @@ pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oau
         .route("/accounts", get(accounts).post(create_account))
         .route("/accounts/{id}", get(account).patch(update_account).delete(delete_account))
         .route("/accounts/{id}/leave", post(leave_account))
+        .route("/accounts/{id}/reconcile", post(reconcile_account).delete(clear_reconciliation))
         .route("/transactions", get(transactions).post(add_transaction))
         .route("/transactions/{id}", get(transaction).patch(update_transaction).delete(delete_transaction))
         .route("/transactions/{id}/attachments", post(add_attachment))
@@ -537,6 +538,14 @@ async fn create_account(State(s): State<Store>, Auth(c, _): Auth, Json(b): Json<
 
 async fn update_account(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>, Json(b): Json<UpdateAccount>) -> R<Account> {
     Ok(Json(s.update_account(&c, id, b).await?))
+}
+
+async fn reconcile_account(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>, Json(b): Json<Reconcile>) -> R<Account> {
+    Ok(Json(s.reconcile_account(&c, id, b).await?))
+}
+
+async fn clear_reconciliation(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>) -> R<Account> {
+    Ok(Json(s.clear_reconciliation(&c, id).await?))
 }
 
 async fn transactions(State(s): State<Store>, Auth(c, _): Auth, Query(f): Query<TxFilter>) -> R<TxPage> {
