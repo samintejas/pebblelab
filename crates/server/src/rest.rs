@@ -138,6 +138,7 @@ pub fn router(store: Store, ui_dir: PathBuf, limits: Arc<Limits>, oauth: Arc<Oau
         .route("/tags", get(tags))
         .route("/parties", get(parties))
         .route("/insights", get(insights))
+        .route("/report", get(report))
         .route("/ask", post(ask))
         .route("/notifications", get(notifications))
         .route("/notifications/read", post(read_notifications))
@@ -657,6 +658,10 @@ async fn budgets(State(s): State<Store>, Auth(c, _): Auth, Query(q): Query<Budge
 
 async fn set_budget(State(s): State<Store>, Auth(c, _): Auth, Json(b): Json<SetBudget>) -> R<Budget> {
     Ok(Json(s.set_budget(&c, b).await?))
+}
+
+async fn report(State(s): State<Store>, Auth(c, _): Auth, Query(q): Query<ReportQuery>) -> R<Report> {
+    Ok(Json(s.report(&c, q).await?))
 }
 
 async fn delete_budget(State(s): State<Store>, Auth(c, _): Auth, Path(id): Path<i64>) -> R<Value> {

@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use chrono::{Datelike, Duration, NaiveDate};
+use chrono::{Datelike, Duration, Months, NaiveDate};
 use sqlx::{AssertSqlSafe, Row};
 
 use crate::api::*;
-use crate::{Caller, Result, Store, visible};
+use crate::{Caller, Error, Result, Store, visible};
 
 /// Investments and transfers move money without spending it.
 const NOT_SPENDING: &str = "investment";
@@ -163,6 +163,72 @@ impl Store {
             loans: accounts.iter().filter(|a| a.loan.is_some()).cloned().collect(),
             investments: accounts.iter().filter(|a| a.kind == AccountKind::Investment).cloned().collect(),
             accounts,
+        })
+    }
+
+    /// A month in review (see [`Report`]): everyone you can see, this month unless one is given.
+    pub async fn report(&self, c: &Caller, q: ReportQuery) -> Result<Report> {
+        c.need("read")?;
+        let now = self.today();
+        let this = now.with_day(1).unwrap();
+        let start = match q.month.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
+            Some(m) => crate::budgets::month_start(m)?,
+            None => this,
+        };
+        if start > this {
+            return Err(Error::bad("that month has not happened yet"));
+        }
+        let (prev, next) = (start - Months::new(1), start + Months::new(1));
+        let month = month_key(start);
+        let rows: Vec<Row_> = self.flow_rows(c.user_id, None, prev).await?.into_iter().filter(|r| r.date < next).collect();
+        let (mut income, mut spending, mut last_income, mut last_spending) = (0, 0, 0, 0);
+        let mut cat: BTreeMap<&str, (i64, i64)> = BTreeMap::new();
+        for r in &rows {
+            let now_ = r.date >= start;
+            if r.is_income() {
+                *if now_ { &mut income } else { &mut last_income } += r.amount;
+            } else if r.is_spend() {
+                *if now_ { &mut spending } else { &mut last_spending } += -r.amount;
+                let e = cat.entry(r.category.as_str()).or_default();
+                if now_ { e.0 += -r.amount } else { e.1 += -r.amount }
+            }
+        }
+        let mut categories: Vec<CategoryChange> = cat.into_iter().map(|(tag, (total, last_month))| CategoryChange { tag: tag.into(), total, last_month }).collect();
+        categories.sort_by(|a, b| b.total.cmp(&a.total).then(b.last_month.cmp(&a.last_month)).then(a.tag.cmp(&b.tag)));
+
+        let sql = format!(
+            "SELECT * FROM (SELECT t.id, t.date, t.description, t.amount, a.name, \
+               COALESCE((SELECT tag FROM tx_tags g WHERE g.tx_id = t.id ORDER BY g.id LIMIT 1), 'untagged') AS tag \
+               FROM transactions t JOIN accounts a ON a.id = t.account_id \
+               WHERE {} AND t.kind = 'debit' AND t.date >= $1 AND t.date < $2) x \
+             WHERE tag <> $3 ORDER BY amount, date DESC, id DESC LIMIT 5",
+            visible(c.user_id)
+        );
+        let biggest = sqlx::query(AssertSqlSafe(sql))
+            .bind(start.to_string())
+            .bind(next.to_string())
+            .bind(NOT_SPENDING)
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(|r| Spend { id: r.get("id"), date: r.get("date"), description: r.get("description"), account: r.get("name"), tag: r.get("tag"), amount: -r.get::<i64, _>("amount") })
+            .collect();
+
+        let budgets = self.budgets(c, BudgetQuery { month: Some(month.clone()) }).await?;
+        let accounts = self.accounts(c, false).await?;
+        let net = self.net_history(c.user_id, &accounts, true, now).await?;
+        let at = |m: &str| net.iter().find(|p| p.month == m).cloned();
+        Ok(Report {
+            net_start: at(&month_key(prev)),
+            net_end: at(&month),
+            month,
+            income,
+            spending,
+            last_income,
+            last_spending,
+            categories,
+            biggest,
+            budgets,
         })
     }
 

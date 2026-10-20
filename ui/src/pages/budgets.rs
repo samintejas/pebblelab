@@ -8,13 +8,6 @@ use crate::fmt;
 use crate::icons::*;
 use crate::state::AppState;
 
-/// `2026-10` moved by `by` months.
-fn shift(ym: &str, by: i32) -> String {
-    let (y, m) = (ym.get(..4).and_then(|y| y.parse::<i32>().ok()).unwrap_or(2000), ym.get(5..7).and_then(|m| m.parse::<i32>().ok()).unwrap_or(1));
-    let n = y * 12 + (m - 1) + by;
-    format!("{:04}-{:02}", n.div_euclid(12), n.rem_euclid(12) + 1)
-}
-
 /// How full a budget is, and how that reads: nearly there at 80%, over past 100%.
 fn severity(b: &Budget) -> Option<Severity> {
     match b.spent * 100 / b.amount.max(1) {
@@ -122,8 +115,8 @@ pub fn Budgets() -> impl IntoView {
             <div class="d-row" style="justify-content:space-between;gap:8px">
                 <h2 class="heading-lg">{move || if is_now.get() { format!("{} so far", fmt::month_year(&month.get())) } else { fmt::month_year(&month.get()) }}</h2>
                 <nav class="d-row" aria-label="month" style="gap:4px;flex-wrap:nowrap">
-                    <button type="button" class="d-btn d-btn--ghost d-btn--icon" aria-label="previous month" on:click=move |_| month.update(|m| *m = shift(m, -1))><Ico d=PREV/></button>
-                    <button type="button" class="d-btn d-btn--ghost d-btn--icon" aria-label="next month" disabled=move || is_now.get() on:click=move |_| month.update(|m| *m = shift(m, 1))><Ico d=NEXT/></button>
+                    <button type="button" class="d-btn d-btn--ghost d-btn--icon" aria-label="previous month" on:click=move |_| month.update(|m| *m = fmt::shift_month(m, -1))><Ico d=PREV/></button>
+                    <button type="button" class="d-btn d-btn--ghost d-btn--icon" aria-label="next month" disabled=move || is_now.get() on:click=move |_| month.update(|m| *m = fmt::shift_month(m, 1))><Ico d=NEXT/></button>
                 </nav>
             </div>
             {move || match shown.get() {
